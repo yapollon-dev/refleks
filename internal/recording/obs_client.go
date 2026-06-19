@@ -20,6 +20,8 @@ import (
 
 const obsWebSocketSubprotocol = "obswebsocket.json"
 
+var obsReplaySavedFallbackTimeout = 8 * time.Second
+
 type OBSVersionInfo struct {
 	OBSVersion          string
 	OBSWebSocketVersion string
@@ -66,7 +68,7 @@ func (c *OBSClient) Connect(ctx context.Context) error {
 	}
 	c.conn = conn
 
-	hello, err := c.readMessage()
+	hello, err := c.readMessage(ctx)
 	if err != nil {
 		c.Close()
 		return fmt.Errorf("OBS hello failed: %w", err)
@@ -91,12 +93,12 @@ func (c *OBSClient) Connect(ctx context.Context) error {
 		identify.Authentication = CreateAuthentication(c.cfg.OBSPassword, helloData.Authentication.Salt, helloData.Authentication.Challenge)
 	}
 
-	if err := c.writeMessage(obsMessage{Op: 1, Data: mustJSON(identify)}); err != nil {
+	if err := c.writeMessage(ctx, obsMessage{Op: 1, Data: mustJSON(identify)}); err != nil {
 		c.Close()
 		return fmt.Errorf("OBS identify failed: %w", err)
 	}
 
-	identified, err := c.readMessage()
+	identified, err := c.readMessage(ctx)
 	if err != nil {
 		c.Close()
 		return fmt.Errorf("OBS authentication failed: %w", err)
@@ -135,7 +137,59 @@ func (c *OBSClient) GetReplayBufferStatus(ctx context.Context) (OBSReplayBufferI
 	return OBSReplayBufferInfo{Active: boolField(data, "outputActive")}, nil
 }
 
+func (c *OBSClient) StartReplayBuffer(ctx context.Context) error {
+	_, err := c.request(ctx, "StartReplayBuffer", nil)
+	return err
+}
+
+func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
+	var savedPath string
+	eventHandler := func(msg obsMessage) {
+		if path := replaySavedPathFromEvent(msg); path != "" {
+			savedPath = path
+		}
+	}
+
+	if _, err := c.requestWithEvents(ctx, "SaveReplayBuffer", nil, eventHandler); err != nil {
+		return "", err
+	}
+	if savedPath != "" {
+		return savedPath, nil
+	}
+
+	deadline := time.Now().Add(obsReplaySavedFallbackTimeout)
+	for {
+		data, err := c.requestWithEvents(ctx, "GetLastReplayBufferReplay", nil, eventHandler)
+		if savedPath != "" {
+			return savedPath, nil
+		}
+		if err == nil {
+			if path := replayPathFromData(data); path != "" {
+				return path, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				return "", err
+			}
+			return "", errors.New("OBS did not report a saved replay path")
+		}
+
+		timer := time.NewTimer(200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
 func (c *OBSClient) request(ctx context.Context, requestType string, requestData any) (map[string]json.RawMessage, error) {
+	return c.requestWithEvents(ctx, requestType, requestData, nil)
+}
+
+func (c *OBSClient) requestWithEvents(ctx context.Context, requestType string, requestData any, onEvent func(obsMessage)) (map[string]json.RawMessage, error) {
 	if c == nil || c.conn == nil {
 		return nil, errors.New("OBS client is not connected")
 	}
@@ -146,37 +200,31 @@ func (c *OBSClient) request(ctx context.Context, requestType string, requestData
 		RequestID:   requestID,
 		RequestData: requestData,
 	}
-	if err := c.writeMessage(obsMessage{Op: 6, Data: mustJSON(req)}); err != nil {
+	if err := c.writeMessage(ctx, obsMessage{Op: 6, Data: mustJSON(req)}); err != nil {
 		return nil, err
 	}
 
-	type result struct {
-		msg obsMessage
-		err error
-	}
-	ch := make(chan result, 1)
-	go func() {
-		msg, err := c.readMessage()
-		ch <- result{msg: msg, err: err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case res := <-ch:
-		if res.err != nil {
-			return nil, res.err
+	for {
+		msg, err := c.readMessage(ctx)
+		if err != nil {
+			return nil, err
 		}
-		if res.msg.Op != 7 {
-			return nil, fmt.Errorf("OBS request %s failed: unexpected op %d", requestType, res.msg.Op)
+		if msg.Op == 5 {
+			if onEvent != nil {
+				onEvent(msg)
+			}
+			continue
+		}
+		if msg.Op != 7 {
+			continue
 		}
 
 		var response obsRequestResponseData
-		if err := json.Unmarshal(res.msg.Data, &response); err != nil {
+		if err := json.Unmarshal(msg.Data, &response); err != nil {
 			return nil, err
 		}
 		if response.RequestID != requestID {
-			return nil, fmt.Errorf("OBS request %s failed: mismatched request id", requestType)
+			continue
 		}
 		if !response.RequestStatus.Result {
 			if response.RequestStatus.Comment != "" {
@@ -191,10 +239,15 @@ func (c *OBSClient) request(ctx context.Context, requestType string, requestData
 	}
 }
 
-func (c *OBSClient) readMessage() (obsMessage, error) {
+func (c *OBSClient) readMessage(ctx context.Context) (obsMessage, error) {
 	var msg obsMessage
 	if c == nil || c.conn == nil {
 		return msg, errors.New("OBS client is not connected")
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.conn.SetReadDeadline(deadline)
+	} else {
+		_ = c.conn.SetReadDeadline(time.Time{})
 	}
 	if err := c.conn.ReadJSON(&msg); err != nil {
 		return msg, err
@@ -202,9 +255,14 @@ func (c *OBSClient) readMessage() (obsMessage, error) {
 	return msg, nil
 }
 
-func (c *OBSClient) writeMessage(msg obsMessage) error {
+func (c *OBSClient) writeMessage(ctx context.Context, msg obsMessage) error {
 	if c == nil || c.conn == nil {
 		return errors.New("OBS client is not connected")
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.conn.SetWriteDeadline(deadline)
+	} else {
+		_ = c.conn.SetWriteDeadline(time.Time{})
 	}
 	return c.conn.WriteJSON(msg)
 }
@@ -254,6 +312,29 @@ func boolField(data map[string]json.RawMessage, key string) bool {
 	return false
 }
 
+func replayPathFromData(data map[string]json.RawMessage) string {
+	for _, key := range []string{"savedReplayPath", "replayPath", "outputPath"} {
+		if path := stringField(data, key); path != "" {
+			return path
+		}
+	}
+	return ""
+}
+
+func replaySavedPathFromEvent(msg obsMessage) string {
+	if msg.Op != 5 {
+		return ""
+	}
+	var event obsEventData
+	if err := json.Unmarshal(msg.Data, &event); err != nil {
+		return ""
+	}
+	if event.EventType != "ReplayBufferSaved" {
+		return ""
+	}
+	return replayPathFromData(event.EventData)
+}
+
 type obsMessage struct {
 	Op   int             `json:"op"`
 	Data json.RawMessage `json:"d,omitempty"`
@@ -291,4 +372,9 @@ type obsRequestResponseData struct {
 	RequestID     string                     `json:"requestId"`
 	RequestStatus obsRequestStatus           `json:"requestStatus"`
 	ResponseData  map[string]json.RawMessage `json:"responseData,omitempty"`
+}
+
+type obsEventData struct {
+	EventType string                     `json:"eventType"`
+	EventData map[string]json.RawMessage `json:"eventData,omitempty"`
 }

@@ -60,7 +60,7 @@ func (a *App) startup(ctx context.Context) {
 	a.cacheSvc = cache.NewService()
 	a.runStore = runs.NewStore(a.settingsSvc)
 	a.updaterSvc = updater.NewService(constants.GitHubOwner, constants.GitHubRepo, constants.AppVersion)
-	if svc, err := recording.NewService(a.settingsSvc); err == nil {
+	if svc, err := recording.NewService(a.settingsSvc, a.runStore); err == nil {
 		a.recordingSvc = svc
 	} else {
 		runtime.LogWarning(a.ctx, "recording service init failed: "+err.Error())
@@ -75,6 +75,15 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize runs runtime service (coordinates Watcher + Mouse)
 	a.runsRuntimeSvc = runs.NewRuntimeService(a.ctx, a.settingsSvc, a.benchmarkSvc, a.runStore)
+	if a.recordingSvc != nil {
+		a.runsRuntimeSvc.SetOnRunParsed(func(rec models.RunRecord) {
+			go func() {
+				if _, err := a.recordingSvc.HandleCompletedRun(a.ctx, rec); err != nil {
+					runtime.LogWarningf(a.ctx, "auto recording failed for %s: %v", rec.FileName, err)
+				}
+			}()
+		})
+	}
 
 	// Initialize Autostart Service
 	a.autostartSvc = autostart.NewService()
@@ -275,6 +284,14 @@ func (a *App) TestRecordingConnection() models.RecordingRuntimeStatus {
 		}
 	}
 	return a.recordingSvc.TestConnection(a.ctx)
+}
+
+// SaveReplayForLatestRun manually saves the current OBS replay buffer for the latest completed run.
+func (a *App) SaveReplayForLatestRun() (models.RecordingRecord, error) {
+	if a.recordingSvc == nil {
+		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.SaveLatestRunReplay(a.ctx)
 }
 
 // GetRecordings returns persisted recording metadata.

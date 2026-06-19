@@ -21,6 +21,7 @@ import {
   QuitApp as _QuitApp,
   RefreshAllBenchmarkProgresses as _RefreshAllBenchmarkProgresses,
   ResetSettings as _ResetSettings,
+  SaveReplayForLatestRun as _SaveReplayForLatestRun,
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
   SelectRecordingDirectory as _SelectRecordingDirectory,
@@ -112,6 +113,11 @@ export async function getRecordingDirectory(): Promise<string> {
 export async function selectRecordingDirectory(): Promise<string> {
   const res = await _SelectRecordingDirectory()
   return String(res || '')
+}
+
+export async function saveReplayForLatestRun(): Promise<RecordingRecord> {
+  const res = await _SaveReplayForLatestRun()
+  return res as unknown as RecordingRecord
 }
 
 export async function saveScenarioNote(scenario: string, notes: string, sens: string): Promise<void> {

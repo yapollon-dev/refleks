@@ -1,7 +1,7 @@
 import { Button } from '@/shared/components'
-import { getRecordings, getRecordingStatus, testRecordingConnection } from '@/shared/lib'
+import { getRecordings, getRecordingStatus, saveReplayForLatestRun, testRecordingConnection } from '@/shared/lib'
 import type { RecordingRecord, RecordingRuntimeStatus } from '@/shared/types'
-import { RefreshCw, Video } from 'lucide-react'
+import { RefreshCw, Save, Video } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 function formatBytes(bytes: number): string {
@@ -21,6 +21,7 @@ export function RecordingsPage() {
   const [recordings, setRecordings] = useState<RecordingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const load = async () => {
@@ -56,6 +57,24 @@ export function RecordingsPage() {
     }
   }
 
+  const handleSaveLatest = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await saveReplayForLatestRun()
+      await load()
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to save latest replay')
+      try {
+        setRecordings(await getRecordings())
+      } catch {
+        // Keep the primary save error visible.
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
       <div className="sticky top-0 z-10 bg-canvas/95 px-5 py-4 backdrop-blur">
@@ -65,6 +84,9 @@ export function RecordingsPage() {
             <p className="text-xs text-surface-muted-foreground">OBS replay metadata, connection status, and storage controls.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void handleSaveLatest()} disabled={saving} variant="default" size="sm">
+              {saving ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-1.5 h-4 w-4" />Save Latest Run Replay</>}
+            </Button>
             <Button onClick={() => void handleTestConnection()} disabled={testing} variant="outline" size="sm">
               {testing ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS'}
             </Button>
@@ -127,16 +149,49 @@ export function RecordingsPage() {
           )}
         </div>
 
-        <div className="mt-4 rounded-xl bg-surface px-5 py-10 text-center shadow-sm">
-          <Video className="mx-auto h-8 w-8 text-surface-muted-foreground" />
-          <h2 className="mt-3 text-sm font-medium text-foreground">
-            {recordings.length === 0 ? 'No recordings yet' : `${recordings.length} recording metadata rows`}
-          </h2>
-          <p className="mx-auto mt-1 max-w-xl text-xs text-surface-muted-foreground">
-            This can verify OBS websocket connectivity and replay-buffer state.
-          </p>
-          {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
-        </div>
+        {recordings.length === 0 ? (
+          <div className="mt-4 rounded-xl bg-surface px-5 py-10 text-center shadow-sm">
+            <Video className="mx-auto h-8 w-8 text-surface-muted-foreground" />
+            <h2 className="mt-3 text-sm font-medium text-foreground">No recordings yet</h2>
+            <p className="mx-auto mt-1 max-w-xl text-xs text-surface-muted-foreground">
+              Use Save Latest Run Replay to save the current OBS replay buffer for the latest completed run.
+            </p>
+            {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+          </div>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-xl bg-surface shadow-sm">
+            <div className="border-b border-surface-border px-5 py-4">
+              <h2 className="text-sm font-medium text-foreground">Recording metadata</h2>
+              <p className="mt-1 text-xs text-surface-muted-foreground">Phase 3 shows save status, reason, path, and errors. File actions arrive in Phase 5.</p>
+              {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+            </div>
+            <div className="divide-y divide-surface-border">
+              {recordings.map(recording => (
+                <div key={recording.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.2fr_0.6fr_0.7fr_1.4fr]">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-foreground">{recording.scenario || recording.runFileName || 'Unknown run'}</div>
+                    <div className="mt-1 truncate text-xs text-surface-muted-foreground">{recording.playedAt || recording.runId}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Status</div>
+                    <div className="mt-1 text-sm text-foreground">{recording.status}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Reason</div>
+                    <div className="mt-1 text-sm text-foreground">{recording.keepReason}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Video path</div>
+                    <div className="mt-1 truncate font-mono text-xs text-surface-muted-foreground" title={recording.videoPath || recording.obsSourcePath || ''}>
+                      {recording.videoPath || recording.obsSourcePath || 'Not saved yet'}
+                    </div>
+                    {recording.lastError && <div className="mt-1 text-xs text-destructive">{recording.lastError}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

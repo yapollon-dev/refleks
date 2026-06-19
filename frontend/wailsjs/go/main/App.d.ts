@@ -46,6 +46,8 @@ export function RefreshAllBenchmarkProgresses():Promise<Record<number, models.Be
 
 export function ResetSettings(arg1:boolean,arg2:boolean,arg3:boolean,arg4:boolean):Promise<void>;
 
+export function SaveReplayForLatestRun():Promise<models.RecordingRecord>;
+
 export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSessionNote(arg1:string,arg2:string,arg3:string):Promise<void>;

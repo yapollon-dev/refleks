@@ -56,6 +56,17 @@ const recordingPolicyOptions = [
   { label: 'Manual only', value: 'manual_only' },
 ]
 
+function parseScenarioList(value: string): string[] {
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function formatScenarioList(value?: string[]): string {
+  return Array.isArray(value) ? value.join(', ') : ''
+}
+
 export function SettingsPage() {
   const setSessionGap = useStore(s => s.setSessionGap)
   const setSessionNotes = useStore(s => s.setSessionNotes)
@@ -499,6 +510,28 @@ export function SettingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </SettingsField>
+
+                <SettingsField label="Always-save Scenarios" description="Comma-separated scenario names. These override the global policy unless also listed as never-save.">
+                  <Input
+                    type="text"
+                    value={formatScenarioList(recording.alwaysSaveScenarios)}
+                    onChange={e => updateRecordingField('alwaysSaveScenarios', parseScenarioList(e.target.value))}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Example: Smoothbot, Air Voltaic"
+                    className="w-full"
+                  />
+                </SettingsField>
+
+                <SettingsField label="Never-save Scenarios" description="Comma-separated scenario names. These take precedence over all other auto-save policies.">
+                  <Input
+                    type="text"
+                    value={formatScenarioList(recording.neverSaveScenarios)}
+                    onChange={e => updateRecordingField('neverSaveScenarios', parseScenarioList(e.target.value))}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Example: Warmup scenario"
+                    className="w-full"
+                  />
                 </SettingsField>
 
                 <div className="grid gap-3 sm:grid-cols-2">

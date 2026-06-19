@@ -11,13 +11,20 @@ const (
 	RecordingPolicyTopThree   RecordingPolicy = "top_three"
 	RecordingPolicyManualOnly RecordingPolicy = "manual_only"
 
-	RecordingKeepReasonEveryRun RecordingKeepReason = "every_run"
-	RecordingKeepReasonManual   RecordingKeepReason = "manual_save"
+	RecordingKeepReasonEveryRun   RecordingKeepReason = "every_run"
+	RecordingKeepReasonManual     RecordingKeepReason = "manual_save"
+	RecordingKeepReasonNewPB      RecordingKeepReason = "new_pb"
+	RecordingKeepReasonPBTie      RecordingKeepReason = "pb_tie"
+	RecordingKeepReasonTopThree   RecordingKeepReason = "top_three"
+	RecordingKeepReasonAlways     RecordingKeepReason = "always_save_scenario"
+	RecordingKeepReasonNever      RecordingKeepReason = "never_save_scenario"
+	RecordingKeepReasonManualOnly RecordingKeepReason = "manual_only"
 
 	RecordingStatusPending RecordingStatus = "pending"
 	RecordingStatusSaved   RecordingStatus = "saved"
 	RecordingStatusFailed  RecordingStatus = "failed"
 	RecordingStatusMissing RecordingStatus = "missing"
+	RecordingStatusSkipped RecordingStatus = "skipped"
 )
 
 type RecordingSettings struct {

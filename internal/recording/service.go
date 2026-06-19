@@ -2,6 +2,10 @@ package recording
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -9,17 +13,20 @@ import (
 
 	"refleks/internal/constants"
 	"refleks/internal/models"
+	"refleks/internal/runs"
 	appsettings "refleks/internal/settings"
 )
 
 type Service struct {
 	mu          sync.RWMutex
+	saveMu      sync.Mutex
 	settingsSvc *appsettings.Service
 	metadata    *MetadataStore
+	runStore    *runs.Store
 	lastStatus  models.RecordingRuntimeStatus
 }
 
-func NewService(settingsSvc *appsettings.Service) (*Service, error) {
+func NewService(settingsSvc *appsettings.Service, runStore *runs.Store) (*Service, error) {
 	path, err := MetadataPath()
 	if err != nil {
 		return nil, err
@@ -27,6 +34,7 @@ func NewService(settingsSvc *appsettings.Service) (*Service, error) {
 	return &Service{
 		settingsSvc: settingsSvc,
 		metadata:    NewMetadataStore(path),
+		runStore:    runStore,
 	}, nil
 }
 
@@ -110,6 +118,154 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	return status
 }
 
+func (s *Service) SaveLatestRunReplay(ctx context.Context) (models.RecordingRecord, error) {
+	if s == nil || s.runStore == nil {
+		return models.RecordingRecord{}, errors.New("run store is not initialized")
+	}
+	recent, err := s.runStore.LoadRecentRuns(1)
+	if err != nil {
+		return models.RecordingRecord{}, err
+	}
+	if len(recent) == 0 {
+		return models.RecordingRecord{}, errors.New("no completed runs are available")
+	}
+	return s.SaveRunReplay(ctx, recent[len(recent)-1])
+}
+
+func (s *Service) SaveRunReplay(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
+	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false)
+}
+
+func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
+	if s == nil || s.settingsSvc == nil || s.runStore == nil {
+		return models.RecordingRecord{}, errors.New("recording service is not initialized")
+	}
+
+	cfg := s.settingsSvc.Get().Recording
+	if !cfg.Enabled {
+		return models.RecordingRecord{}, nil
+	}
+	rec = runs.EnsureRunID(rec)
+	if exists, err := s.autoMetadataExistsForRun(rec.RunID); err != nil {
+		return models.RecordingRecord{}, err
+	} else if exists {
+		return models.RecordingRecord{}, nil
+	}
+
+	allRuns, err := s.runStore.LoadAllRunSummaries()
+	if err != nil {
+		return models.RecordingRecord{}, err
+	}
+	decision := EvaluatePolicy(cfg, rec, allRuns)
+	if !decision.ShouldSave {
+		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
+		record.Status = models.RecordingStatusSkipped
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := s.metadata.Upsert(record); err != nil {
+			return models.RecordingRecord{}, err
+		}
+		return record, nil
+	}
+	if !cfg.AutoConnect {
+		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
+		record.Status = models.RecordingStatusFailed
+		record.LastError = "automatic OBS connection is disabled"
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := s.metadata.Upsert(record); err != nil {
+			return models.RecordingRecord{}, err
+		}
+		return record, errors.New(record.LastError)
+	}
+	return s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave)
+}
+
+func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool) (models.RecordingRecord, error) {
+	if s == nil || s.settingsSvc == nil || s.metadata == nil {
+		return models.RecordingRecord{}, errors.New("recording service is not initialized")
+	}
+
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	cfg := s.settingsSvc.Get().Recording
+	if !cfg.Enabled {
+		return models.RecordingRecord{}, errors.New("recording is disabled")
+	}
+	if strings.TrimSpace(cfg.RecordingDir) == "" {
+		return models.RecordingRecord{}, errors.New("recording folder is not configured")
+	}
+
+	rec = runs.EnsureRunID(rec)
+	if existing, ok, err := s.activeRecordingForRun(rec.RunID); err != nil {
+		return models.RecordingRecord{}, err
+	} else if ok {
+		return existing, fmt.Errorf("recording already exists for this run")
+	}
+
+	record := newRecordingRecord(rec, reason, pbAtSave)
+	if err := s.metadata.Upsert(record); err != nil {
+		return models.RecordingRecord{}, err
+	}
+
+	fail := func(err error) (models.RecordingRecord, error) {
+		record.Status = models.RecordingStatusFailed
+		record.LastError = err.Error()
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		_ = s.metadata.Upsert(record)
+		return record, err
+	}
+
+	client := NewOBSClient(cfg)
+	obsCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := client.Connect(obsCtx); err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	if err := s.ensureReplayBuffer(obsCtx, client, cfg); err != nil {
+		return fail(err)
+	}
+
+	sourcePath, err := client.SaveReplayBuffer(obsCtx)
+	if err != nil {
+		return fail(err)
+	}
+	record.OBSSourcePath = sourcePath
+	if err := s.metadata.Upsert(record); err != nil {
+		return fail(err)
+	}
+
+	finalPath, size, err := moveRecordingFile(sourcePath, cfg.RecordingDir, rec.FileName)
+	if err != nil {
+		return fail(err)
+	}
+
+	record.VideoPath = finalPath
+	record.SizeBytes = size
+	record.Status = models.RecordingStatusSaved
+	record.LastError = ""
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.metadata.Upsert(record); err != nil {
+		return record, err
+	}
+	return record, nil
+}
+
+func (s *Service) ensureReplayBuffer(ctx context.Context, client *OBSClient, cfg models.RecordingSettings) error {
+	status, err := client.GetReplayBufferStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if status.Active {
+		return nil
+	}
+	if !cfg.AutoStartReplayBuffer {
+		return errors.New("OBS replay buffer is not active")
+	}
+	return client.StartReplayBuffer(ctx)
+}
+
 func (s *Service) localStatus() models.RecordingRuntimeStatus {
 	cfg := models.RecordingSettings{}
 	if s != nil && s.settingsSvc != nil {
@@ -157,11 +313,105 @@ func classifyConnectionError(err error) string {
 	return "error"
 }
 
+func (s *Service) activeRecordingForRun(runID string) (models.RecordingRecord, bool, error) {
+	records, err := s.List()
+	if err != nil {
+		return models.RecordingRecord{}, false, err
+	}
+	for _, record := range records {
+		if record.RunID != runID {
+			continue
+		}
+		if record.Status == models.RecordingStatusFailed || record.Status == models.RecordingStatusMissing || record.Status == models.RecordingStatusSkipped {
+			continue
+		}
+		return record, true, nil
+	}
+	return models.RecordingRecord{}, false, nil
+}
+
+func (s *Service) autoMetadataExistsForRun(runID string) (bool, error) {
+	records, err := s.List()
+	if err != nil {
+		return false, err
+	}
+	for _, record := range records {
+		if record.RunID != runID {
+			continue
+		}
+		if record.Status == models.RecordingStatusFailed || record.Status == models.RecordingStatusMissing {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (s *Service) List() ([]models.RecordingRecord, error) {
 	if s == nil || s.metadata == nil {
 		return []models.RecordingRecord{}, nil
 	}
 	return s.metadata.List()
+}
+
+func newRecordingRecord(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool) models.RecordingRecord {
+	now := time.Now().UTC().Format(time.RFC3339)
+	return models.RecordingRecord{
+		ID:          newRecordingID(),
+		RunID:       rec.RunID,
+		RunFileName: rec.FileName,
+		RunFilePath: rec.FilePath,
+		Scenario:    statString(rec.Stats, "Scenario"),
+		Score:       statFloat(rec.Stats, "Score"),
+		PlayedAt:    statString(rec.Stats, "Date Played"),
+		KeepReason:  reason,
+		Status:      models.RecordingStatusPending,
+		PBAtSave:    pbAtSave,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+}
+
+func newRecordingID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return "rec_" + hex.EncodeToString(b[:])
+	}
+	return fmt.Sprintf("rec_%d", time.Now().UnixNano())
+}
+
+func statString(stats map[string]any, key string) string {
+	if stats == nil {
+		return ""
+	}
+	switch v := stats[key].(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case nil:
+		return ""
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
+}
+
+func statFloat(stats map[string]any, key string) float64 {
+	if stats == nil {
+		return 0
+	}
+	switch v := stats[key].(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case int32:
+		return float64(v)
+	default:
+		return 0
+	}
 }
 
 func (s *Service) RecordingDir() string {

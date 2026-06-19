@@ -178,7 +178,7 @@ import type { Font, Theme } from '../lib/theme'
 
 export type RecordingPolicy = 'every_run' | 'new_pb' | 'pb_and_ties' | 'top_three' | 'manual_only'
 export type RecordingKeepReason = 'every_run' | 'manual_save'
-export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing'
+export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing' | 'skipped'
 
 export interface RecordingSettings {
   enabled: boolean
