@@ -18,6 +18,7 @@ type Settings struct {
 	AutostartEnabled     bool                    `json:"autostartEnabled"`
 	AnonymousEnabled     bool                    `json:"anonymousEnabled"`
 	RunSyncEnabled       bool                    `json:"runSyncEnabled"`
+	Recording            RecordingSettings       `json:"recording"`
 	ScenarioNotes        map[string]ScenarioNote `json:"scenarioNotes,omitempty"`
 	SessionNotes         map[string]SessionNote  `json:"sessionNotes,omitempty"`
 }

@@ -19,6 +19,7 @@ import {
   getVersion,
   openURL,
   quitApp,
+  selectRecordingDirectory,
   setAutostart,
   setFont,
   setTheme,
@@ -26,7 +27,7 @@ import {
   type Font,
   type Theme,
 } from '@/shared/lib'
-import type { Settings, UpdateInfo } from '@/shared/types'
+import type { RecordingSettings, Settings, UpdateInfo } from '@/shared/types'
 import { ChevronDown, ChevronUp, Download, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { ClearCacheModal } from '../components/ClearCacheModal'
@@ -46,6 +47,13 @@ const sessionGapOptions = [5, 10, 15, 20, 30, 45, 60, 90, 120].map(m => ({
   label: `${m} minutes`,
   value: String(m),
 }))
+const recordingPolicyOptions = [
+  { label: 'Every completed run', value: 'every_run' },
+  { label: 'New PBs only', value: 'new_pb' },
+  { label: 'PBs and ties', value: 'pb_and_ties' },
+  { label: 'Local top three', value: 'top_three' },
+  { label: 'Manual only', value: 'manual_only' },
+]
 
 export function SettingsPage() {
   const setSessionGap = useStore(s => s.setSessionGap)
@@ -112,6 +120,37 @@ export function SettingsPage() {
       }
       return next
     })
+  }
+
+  const updateRecordingField = <K extends keyof RecordingSettings>(key: K, value: RecordingSettings[K], persist = false) => {
+    setSettings(prev => {
+      if (!prev) return null
+      const next = {
+        ...prev,
+        recording: {
+          ...prev.recording,
+          [key]: value,
+        },
+      }
+      if (persist) {
+        void queueSettingsSave(next)
+      } else {
+        setHasUnsavedChanges(true)
+      }
+      return next
+    })
+  }
+
+  const handleSelectRecordingDirectory = async () => {
+    try {
+      const dir = await selectRecordingDirectory()
+      if (dir) {
+        updateRecordingField('recordingDir', dir)
+      }
+    } catch (e) {
+      console.error('select recording directory error:', e)
+      alert('Failed to select recording folder')
+    }
   }
 
   const handleAutostartChange = async (enabled: boolean) => {
@@ -234,6 +273,8 @@ export function SettingsPage() {
     )
   }
 
+  const recording = settings.recording
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
       <div className="sticky top-0 z-10 bg-canvas/95 px-5 py-4 backdrop-blur">
@@ -343,6 +384,122 @@ export function SettingsPage() {
             </div>
 
             <div className="space-y-4">
+              <SettingsSection title="Recording" description="Local OBS replay-buffer settings. Lorem ipsum bla bla">
+                <SettingsField label="Auto Recording" description="Enable run-linked replay saving when later recording is available." checkbox>
+                  <Checkbox
+                    checked={!!recording.enabled}
+                    onCheckedChange={v => updateRecordingField('enabled', v === true, true)}
+                  />
+                </SettingsField>
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_7rem]">
+                  <SettingsField label="OBS Host">
+                    <Input
+                      type="text"
+                      value={recording.obsHost}
+                      onChange={e => updateRecordingField('obsHost', e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      className="w-full font-mono"
+                    />
+                  </SettingsField>
+                  <SettingsField label="OBS Port">
+                    <Input
+                      type="number"
+                      value={recording.obsPort}
+                      onChange={e => updateRecordingField('obsPort', parseInt(e.target.value, 10) || recording.obsPort)}
+                      onKeyDown={handleInputKeyDown}
+                      min={1}
+                      max={65535}
+                      className="w-full text-center"
+                    />
+                  </SettingsField>
+                </div>
+
+                <SettingsField label="OBS Password" description="Stored locally in settings and masked in the UI.">
+                  <Input
+                    type="password"
+                    value={recording.obsPassword || ''}
+                    onChange={e => updateRecordingField('obsPassword', e.target.value || undefined)}
+                    onKeyDown={handleInputKeyDown}
+                    className="w-full max-w-sm"
+                    placeholder="Optional"
+                  />
+                </SettingsField>
+
+                <SettingsField label="Recording Folder" description="Default: $HOME/.refleks/recordings">
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      type="text"
+                      value={recording.recordingDir}
+                      onChange={e => updateRecordingField('recordingDir', e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      className="min-w-[16rem] flex-1 font-mono"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleSelectRecordingDirectory()}>
+                      Browse
+                    </Button>
+                  </div>
+                </SettingsField>
+
+                <SettingsField label="Default Save Policy" description="Policy evaluation later">
+                  <Select value={recording.savePolicy} onValueChange={v => updateRecordingField('savePolicy', v as RecordingSettings['savePolicy'], true)}>
+                    <SelectTrigger className="h-8 w-max min-w-[12rem] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {recordingPolicyOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingsField>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsField label="Storage Limit (GB)">
+                    <Input
+                      type="number"
+                      value={recording.storageLimitGb}
+                      onChange={e => updateRecordingField('storageLimitGb', parseInt(e.target.value, 10) || recording.storageLimitGb)}
+                      onKeyDown={handleInputKeyDown}
+                      min={1}
+                      className="w-24 text-center"
+                    />
+                  </SettingsField>
+                  <SettingsField label="Minimum Free Space (GB)">
+                    <Input
+                      type="number"
+                      value={recording.minFreeSpaceGb}
+                      onChange={e => updateRecordingField('minFreeSpaceGb', parseInt(e.target.value, 10) || recording.minFreeSpaceGb)}
+                      onKeyDown={handleInputKeyDown}
+                      min={1}
+                      className="w-24 text-center"
+                    />
+                  </SettingsField>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsField label="Auto Connect" description="Connect to OBS automatically when later phases need it." checkbox>
+                    <Checkbox
+                      checked={!!recording.autoConnect}
+                      onCheckedChange={v => updateRecordingField('autoConnect', v === true, true)}
+                    />
+                  </SettingsField>
+                  <SettingsField label="Auto-start Replay Buffer" description="Start OBS replay buffer automatically when later phases need it." checkbox>
+                    <Checkbox
+                      checked={!!recording.autoStartReplayBuffer}
+                      onCheckedChange={v => updateRecordingField('autoStartReplayBuffer', v === true, true)}
+                    />
+                  </SettingsField>
+                </div>
+
+                <SettingsField label="Auto Cleanup" description="Clean up videos" checkbox>
+                  <Checkbox
+                    checked={!!recording.autoCleanup}
+                    onCheckedChange={v => updateRecordingField('autoCleanup', v === true, true)}
+                  />
+                </SettingsField>
+              </SettingsSection>
+
               <SettingsSection title="Appearance" description="Visual preferences for the interface.">
                 <SettingsField label="Theme" description="Color theme for the application">
                   <Select value={settings.theme} onValueChange={handleThemeChange}>

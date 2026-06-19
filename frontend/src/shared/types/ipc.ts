@@ -88,6 +88,7 @@ export type StatKey = keyof {
 }
 
 export interface RunRecord {
+  runId?: string
   filePath: string
   fileName: string
   stats: ScenarioStats
@@ -175,6 +176,57 @@ export interface BenchmarkProgress {
 
 import type { Font, Theme } from '../lib/theme'
 
+export type RecordingPolicy = 'every_run' | 'new_pb' | 'pb_and_ties' | 'top_three' | 'manual_only'
+export type RecordingKeepReason = 'every_run' | 'manual_save'
+export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing'
+
+export interface RecordingSettings {
+  enabled: boolean
+  obsHost: string
+  obsPort: number
+  obsPassword?: string
+  autoConnect: boolean
+  autoStartReplayBuffer: boolean
+  savePolicy: RecordingPolicy
+  alwaysSaveScenarios?: string[]
+  neverSaveScenarios?: string[]
+  recordingDir: string
+  storageLimitGb: number
+  minFreeSpaceGb: number
+  autoCleanup: boolean
+}
+
+export interface RecordingRecord {
+  id: string
+  runId: string
+  runFileName: string
+  runFilePath: string
+  scenario: string
+  score: number
+  playedAt?: string
+  keepReason: RecordingKeepReason
+  obsSourcePath?: string
+  videoPath: string
+  sizeBytes: number
+  status: RecordingStatusValue
+  protected: boolean
+  pbAtSave: boolean
+  createdAt: string
+  updatedAt: string
+  lastError?: string
+}
+
+export interface RecordingRuntimeStatus {
+  enabled: boolean
+  recordingDir: string
+  metadataPath: string
+  totalRecordings: number
+  totalSizeBytes: number
+  connectionStatus: string
+  replayBufferStatus: string
+  lastError?: string
+}
+
 export interface Settings {
   steamInstallDir?: string
   kovaaksInstallDir: string
@@ -192,6 +244,7 @@ export interface Settings {
   autostartEnabled?: boolean
   anonymousEnabled?: boolean
   runSyncEnabled?: boolean
+  recording: RecordingSettings
   scenarioNotes?: Record<string, ScenarioNote>
   sessionNotes?: Record<string, SessionNote>
 }

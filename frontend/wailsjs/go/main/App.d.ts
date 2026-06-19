@@ -22,6 +22,12 @@ export function GetLastScenarioScores(arg1:string):Promise<Array<models.KovaaksL
 
 export function GetRecentRuns(arg1:number):Promise<Array<models.RunRecord>>;
 
+export function GetRecordingDirectory():Promise<string>;
+
+export function GetRecordingStatus():Promise<models.RecordingRuntimeStatus>;
+
+export function GetRecordings():Promise<Array<models.RecordingRecord>>;
+
 export function GetRunEvents(arg1:string):Promise<Array<any>>;
 
 export function GetRunTrace(arg1:string):Promise<string>;
@@ -43,6 +49,8 @@ export function ResetSettings(arg1:boolean,arg2:boolean,arg3:boolean,arg4:boolea
 export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSessionNote(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SelectRecordingDirectory():Promise<string>;
 
 export function SetAutostart(arg1:boolean):Promise<void>;
 

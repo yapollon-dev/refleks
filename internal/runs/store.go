@@ -132,6 +132,7 @@ func (s *Store) LoadRecentRuns(limit int) ([]models.RunRecord, error) {
 			continue
 		}
 		out = append(out, models.RunRecord{
+			RunID:    ComputeRunID(rec.FileName, rec.Stats),
 			FilePath: v.path,
 			FileName: rec.FileName,
 			Stats:    rec.Stats,

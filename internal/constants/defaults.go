@@ -2,12 +2,16 @@ package constants
 
 const (
 	// Default UI/analysis values
-	DefaultSessionGapMinutes  = 20
-	DefaultTheme              = "dark"
-	DefaultFont               = "montserrat"
-	DefaultMouseBufferMinutes = 2
-	DefaultRecentRunsDays     = 90
-	DefaultRecentRunsMinCount = 1500
+	DefaultSessionGapMinutes       = 20
+	DefaultTheme                   = "dark"
+	DefaultFont                    = "montserrat"
+	DefaultMouseBufferMinutes      = 2
+	DefaultRecentRunsDays          = 90
+	DefaultRecentRunsMinCount      = 1500
+	DefaultOBSHost                 = "127.0.0.1"
+	DefaultOBSPort                 = 4455
+	DefaultRecordingStorageLimitGB = 25
+	DefaultRecordingMinFreeSpaceGB = 5
 
 	// Watcher defaults
 	DefaultPollIntervalSeconds = 5

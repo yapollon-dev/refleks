@@ -3,10 +3,11 @@ package constants
 const (
 	// Settings + paths
 	// Name of the app config folder in the user's home directory
-	ConfigDirName  = ".refleks"
-	RunsSubdirName = "runs"
-	RunFileExt     = ".refleks"
-	StatsFileExt   = ".csv"
+	ConfigDirName        = ".refleks"
+	RunsSubdirName       = "runs"
+	RecordingsSubdirName = "recordings"
+	RunFileExt           = ".refleks"
+	StatsFileExt         = ".csv"
 
 	KovaaksDataDirName         = "FPSAimTrainer"
 	KovaaksStatsDirName        = "stats"
@@ -38,4 +39,5 @@ const (
 	BenchmarksDataCacheFileName    = "benchmarks.json"
 	BenchmarkProgressCacheFileName = "benchmark_progress.json"
 	SettingsFileName               = "settings.json"
+	RecordingsFileName             = "recordings.json"
 )

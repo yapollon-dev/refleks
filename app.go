@@ -14,6 +14,7 @@ import (
 	"refleks/internal/constants"
 	"refleks/internal/models"
 	"refleks/internal/process"
+	"refleks/internal/recording"
 	"refleks/internal/runs"
 	"refleks/internal/scenarios"
 	appsettings "refleks/internal/settings"
@@ -29,6 +30,7 @@ type App struct {
 	scenarioSvc    *scenarios.Service
 	updaterSvc     *updater.Service
 	cacheSvc       *cache.Service
+	recordingSvc   *recording.Service
 	runStore       *runs.Store
 	autostartSvc   *autostart.Service
 	processWatcher *process.Watcher
@@ -58,6 +60,11 @@ func (a *App) startup(ctx context.Context) {
 	a.cacheSvc = cache.NewService()
 	a.runStore = runs.NewStore(a.settingsSvc)
 	a.updaterSvc = updater.NewService(constants.GitHubOwner, constants.GitHubRepo, constants.AppVersion)
+	if svc, err := recording.NewService(a.settingsSvc); err == nil {
+		a.recordingSvc = svc
+	} else {
+		runtime.LogWarning(a.ctx, "recording service init failed: "+err.Error())
+	}
 
 	// Initialize Domain Services
 	a.benchmarkSvc = benchmarks.NewService(a.settingsSvc, a.cacheSvc)
@@ -216,6 +223,7 @@ func (a *App) ResetSettings(resetConfig, resetFavorites, resetScenarioNotes, res
 		newSettings.AutostartEnabled = defaults.AutostartEnabled
 		newSettings.AnonymousEnabled = defaults.AnonymousEnabled
 		newSettings.RunSyncEnabled = defaults.RunSyncEnabled
+		newSettings.Recording = defaults.Recording
 		newSettings.LastSeenVersion = defaults.LastSeenVersion
 
 		// Sync autostart state
@@ -241,6 +249,48 @@ func (a *App) ResetSettings(resetConfig, resetFavorites, resetScenarioNotes, res
 	}
 
 	return a.runsRuntimeSvc.OverwriteSettings(newSettings)
+}
+
+// --- Recording IPC ---
+
+// GetRecordingStatus returns safe local recording state without contacting OBS.
+func (a *App) GetRecordingStatus() models.RecordingRuntimeStatus {
+	if a.recordingSvc == nil {
+		return models.RecordingRuntimeStatus{
+			ConnectionStatus:   "not_configured",
+			ReplayBufferStatus: "not_checked",
+			LastError:          "recording service is not initialized",
+		}
+	}
+	return a.recordingSvc.Status()
+}
+
+// GetRecordings returns persisted recording metadata.
+func (a *App) GetRecordings() ([]models.RecordingRecord, error) {
+	if a.recordingSvc == nil {
+		return []models.RecordingRecord{}, nil
+	}
+	return a.recordingSvc.List()
+}
+
+// GetRecordingDirectory returns the configured local recording folder.
+func (a *App) GetRecordingDirectory() string {
+	if a.recordingSvc == nil {
+		return ""
+	}
+	return a.recordingSvc.RecordingDir()
+}
+
+// SelectRecordingDirectory opens a native directory picker for the recording folder setting.
+func (a *App) SelectRecordingDirectory() (string, error) {
+	current := ""
+	if a.recordingSvc != nil {
+		current = a.recordingSvc.RecordingDir()
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Choose recording folder",
+		DefaultDirectory: current,
+	})
 }
 
 // --- App metadata ---

@@ -1,14 +1,14 @@
 export namespace models {
-	
+
 	export class BenchmarkSubcategory {
 	    subcategoryName: string;
 	    scenarioCount: number;
 	    color?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkSubcategory(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.subcategoryName = source["subcategoryName"];
@@ -20,18 +20,18 @@ export namespace models {
 	    categoryName: string;
 	    color?: string;
 	    subcategories: BenchmarkSubcategory[];
-	
+
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkCategory(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.categoryName = source["categoryName"];
 	        this.color = source["color"];
 	        this.subcategories = this.convertValues(source["subcategories"], BenchmarkSubcategory);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -361,6 +361,112 @@ export namespace models {
 	
 	
 	
+	export class RecordingRecord {
+	    id: string;
+	    runId: string;
+	    runFileName: string;
+	    runFilePath: string;
+	    scenario: string;
+	    score: number;
+	    playedAt?: string;
+	    keepReason: string;
+	    obsSourcePath?: string;
+	    videoPath: string;
+	    sizeBytes: number;
+	    status: string;
+	    protected: boolean;
+	    pbAtSave: boolean;
+	    createdAt: string;
+	    updatedAt: string;
+	    lastError?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new RecordingRecord(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.runId = source["runId"];
+	        this.runFileName = source["runFileName"];
+	        this.runFilePath = source["runFilePath"];
+	        this.scenario = source["scenario"];
+	        this.score = source["score"];
+	        this.playedAt = source["playedAt"];
+	        this.keepReason = source["keepReason"];
+	        this.obsSourcePath = source["obsSourcePath"];
+	        this.videoPath = source["videoPath"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.status = source["status"];
+	        this.protected = source["protected"];
+	        this.pbAtSave = source["pbAtSave"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.lastError = source["lastError"];
+	    }
+	}
+	export class RecordingRuntimeStatus {
+	    enabled: boolean;
+	    recordingDir: string;
+	    metadataPath: string;
+	    totalRecordings: number;
+	    totalSizeBytes: number;
+	    connectionStatus: string;
+	    replayBufferStatus: string;
+	    lastError?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new RecordingRuntimeStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.recordingDir = source["recordingDir"];
+	        this.metadataPath = source["metadataPath"];
+	        this.totalRecordings = source["totalRecordings"];
+	        this.totalSizeBytes = source["totalSizeBytes"];
+	        this.connectionStatus = source["connectionStatus"];
+	        this.replayBufferStatus = source["replayBufferStatus"];
+	        this.lastError = source["lastError"];
+	    }
+	}
+	export class RecordingSettings {
+	    enabled: boolean;
+	    obsHost: string;
+	    obsPort: number;
+	    obsPassword?: string;
+	    autoConnect: boolean;
+	    autoStartReplayBuffer: boolean;
+	    savePolicy: string;
+	    alwaysSaveScenarios?: string[];
+	    neverSaveScenarios?: string[];
+	    recordingDir: string;
+	    storageLimitGb: number;
+	    minFreeSpaceGb: number;
+	    autoCleanup: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new RecordingSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.obsHost = source["obsHost"];
+	        this.obsPort = source["obsPort"];
+	        this.obsPassword = source["obsPassword"];
+	        this.autoConnect = source["autoConnect"];
+	        this.autoStartReplayBuffer = source["autoStartReplayBuffer"];
+	        this.savePolicy = source["savePolicy"];
+	        this.alwaysSaveScenarios = source["alwaysSaveScenarios"];
+	        this.neverSaveScenarios = source["neverSaveScenarios"];
+	        this.recordingDir = source["recordingDir"];
+	        this.storageLimitGb = source["storageLimitGb"];
+	        this.minFreeSpaceGb = source["minFreeSpaceGb"];
+	        this.autoCleanup = source["autoCleanup"];
+	    }
+	}
 	export class RunEnvironment {
 	    appVersion: string;
 	    os: string;
@@ -416,6 +522,7 @@ export namespace models {
 	    }
 	}
 	export class RunRecord {
+	    runId?: string;
 	    filePath: string;
 	    fileName: string;
 	    stats: Record<string, any>;
@@ -428,6 +535,7 @@ export namespace models {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.runId = source["runId"];
 	        this.filePath = source["filePath"];
 	        this.fileName = source["fileName"];
 	        this.stats = source["stats"];
@@ -499,6 +607,7 @@ export namespace models {
 	    autostartEnabled: boolean;
 	    anonymousEnabled: boolean;
 	    runSyncEnabled: boolean;
+	    recording: RecordingSettings;
 	    scenarioNotes?: Record<string, ScenarioNote>;
 	    sessionNotes?: Record<string, SessionNote>;
 	
@@ -524,6 +633,7 @@ export namespace models {
 	        this.autostartEnabled = source["autostartEnabled"];
 	        this.anonymousEnabled = source["anonymousEnabled"];
 	        this.runSyncEnabled = source["runSyncEnabled"];
+	        this.recording = this.convertValues(source["recording"], RecordingSettings);
 	        this.scenarioNotes = this.convertValues(source["scenarioNotes"], ScenarioNote, true);
 	        this.sessionNotes = this.convertValues(source["sessionNotes"], SessionNote, true);
 	    }
@@ -568,4 +678,3 @@ export namespace models {
 	}
 
 }
-

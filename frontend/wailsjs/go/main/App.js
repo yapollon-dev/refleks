@@ -42,6 +42,18 @@ export function GetRecentRuns(arg1) {
   return window['go']['main']['App']['GetRecentRuns'](arg1);
 }
 
+export function GetRecordingDirectory() {
+  return window['go']['main']['App']['GetRecordingDirectory']();
+}
+
+export function GetRecordingStatus() {
+  return window['go']['main']['App']['GetRecordingStatus']();
+}
+
+export function GetRecordings() {
+  return window['go']['main']['App']['GetRecordings']();
+}
+
 export function GetRunEvents(arg1) {
   return window['go']['main']['App']['GetRunEvents'](arg1);
 }
@@ -84,6 +96,10 @@ export function SaveScenarioNote(arg1, arg2, arg3) {
 
 export function SaveSessionNote(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveSessionNote'](arg1, arg2, arg3);
+}
+
+export function SelectRecordingDirectory() {
+  return window['go']['main']['App']['SelectRecordingDirectory']();
 }
 
 export function SetAutostart(arg1) {

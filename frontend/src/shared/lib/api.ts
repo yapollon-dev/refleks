@@ -9,6 +9,9 @@ import {
   GetFavoriteBenchmarks as _GetFavoriteBenchmarks,
   GetLastScenarioScores as _GetLastScenarioScores,
   GetRecentRuns as _GetRecentRuns,
+  GetRecordingDirectory as _GetRecordingDirectory,
+  GetRecordings as _GetRecordings,
+  GetRecordingStatus as _GetRecordingStatus,
   GetRunEvents as _GetRunEvents,
   GetRunTrace as _GetRunTrace,
   GetSettings as _GetSettings,
@@ -20,13 +23,14 @@ import {
   ResetSettings as _ResetSettings,
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
+  SelectRecordingDirectory as _SelectRecordingDirectory,
   SetAutostart as _SetAutostart,
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
   StartWatcher as _StartWatcher,
   StopWatcher as _StopWatcher,
   UpdateSettings as _UpdateSettings
 } from '@wails/go/main/App'
-import type { Benchmark, BenchmarkProgress, KovaaksLastScore, RunRecord, Settings, UpdateInfo } from '../types/ipc'
+import type { Benchmark, BenchmarkProgress, KovaaksLastScore, RecordingRecord, RecordingRuntimeStatus, RunRecord, Settings, UpdateInfo } from '../types/ipc'
 
 // Typed wrappers around Wails-generated bindings with normalized results
 
@@ -82,6 +86,26 @@ export async function updateSettings(payload: Settings): Promise<void> {
 
 export async function resetSettings(config: boolean, favorites: boolean, scenarioNotes: boolean, sessionNotes: boolean): Promise<void> {
   await _ResetSettings(config, favorites, scenarioNotes, sessionNotes)
+}
+
+export async function getRecordingStatus(): Promise<RecordingRuntimeStatus> {
+  const res = await _GetRecordingStatus()
+  return res as unknown as RecordingRuntimeStatus
+}
+
+export async function getRecordings(): Promise<RecordingRecord[]> {
+  const res = await _GetRecordings()
+  return (Array.isArray(res) ? res : []) as unknown as RecordingRecord[]
+}
+
+export async function getRecordingDirectory(): Promise<string> {
+  const res = await _GetRecordingDirectory()
+  return String(res || '')
+}
+
+export async function selectRecordingDirectory(): Promise<string> {
+  const res = await _SelectRecordingDirectory()
+  return String(res || '')
 }
 
 export async function saveScenarioNote(scenario: string, notes: string, sens: string): Promise<void> {
