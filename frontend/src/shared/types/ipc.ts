@@ -224,6 +224,8 @@ export interface RecordingRuntimeStatus {
   totalSizeBytes: number
   connectionStatus: string
   replayBufferStatus: string
+  obsVersion?: string
+  obsWebSocketVersion?: string
   lastError?: string
 }
 

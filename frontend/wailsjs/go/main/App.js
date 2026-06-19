@@ -122,6 +122,10 @@ export function StopWatcher() {
   return window['go']['main']['App']['StopWatcher']();
 }
 
+export function TestRecordingConnection() {
+  return window['go']['main']['App']['TestRecordingConnection']();
+}
+
 export function UpdateSettings(arg1) {
   return window['go']['main']['App']['UpdateSettings'](arg1);
 }

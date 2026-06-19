@@ -23,11 +23,12 @@ import {
   setAutostart,
   setFont,
   setTheme,
+  testRecordingConnection,
   updateSettings,
   type Font,
   type Theme,
 } from '@/shared/lib'
-import type { RecordingSettings, Settings, UpdateInfo } from '@/shared/types'
+import type { RecordingRuntimeStatus, RecordingSettings, Settings, UpdateInfo } from '@/shared/types'
 import { ChevronDown, ChevronUp, Download, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { ClearCacheModal } from '../components/ClearCacheModal'
@@ -75,6 +76,8 @@ export function SettingsPage() {
   const [isResetOpen, setIsResetOpen] = useState(false)
   const [isClearCacheOpen, setIsClearCacheOpen] = useState(false)
   const [welcomePresentation, setWelcomePresentation] = useState<WelcomePresentation | null>(null)
+  const [recordingStatus, setRecordingStatus] = useState<RecordingRuntimeStatus | null>(null)
+  const [testingRecordingConnection, setTestingRecordingConnection] = useState(false)
 
   useEffect(() => {
     getSettings().then(setSettings).catch(() => { })
@@ -150,6 +153,28 @@ export function SettingsPage() {
     } catch (e) {
       console.error('select recording directory error:', e)
       alert('Failed to select recording folder')
+    }
+  }
+
+  const handleTestRecordingConnection = async () => {
+    if (!settings) return
+    setTestingRecordingConnection(true)
+    try {
+      const next = await testRecordingConnection()
+      setRecordingStatus(next)
+    } catch (e) {
+      setRecordingStatus(prev => ({
+        enabled: settings.recording.enabled,
+        recordingDir: settings.recording.recordingDir,
+        metadataPath: prev?.metadataPath || '',
+        totalRecordings: prev?.totalRecordings || 0,
+        totalSizeBytes: prev?.totalSizeBytes || 0,
+        connectionStatus: 'error',
+        replayBufferStatus: 'unknown',
+        lastError: (e as Error)?.message || 'Failed to test OBS connection',
+      }))
+    } finally {
+      setTestingRecordingConnection(false)
     }
   }
 
@@ -384,7 +409,7 @@ export function SettingsPage() {
             </div>
 
             <div className="space-y-4">
-              <SettingsSection title="Recording" description="Local OBS replay-buffer settings. Lorem ipsum bla bla">
+              <SettingsSection title="Recording" description="Local OBS replay-buffer settings. This can test OBS connection and replay-buffer status.">
                 <SettingsField label="Auto Recording" description="Enable run-linked replay saving when later recording is available." checkbox>
                   <Checkbox
                     checked={!!recording.enabled}
@@ -426,6 +451,28 @@ export function SettingsPage() {
                   />
                 </SettingsField>
 
+                <div className="rounded-lg bg-surface-subtle px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleTestRecordingConnection()} disabled={testingRecordingConnection}>
+                      {testingRecordingConnection ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS Connection'}
+                    </Button>
+                    <span className="text-xs text-surface-muted-foreground">
+                      Connection: <span className="font-medium text-foreground">{recordingStatus?.connectionStatus || 'not checked'}</span>
+                    </span>
+                    <span className="text-xs text-surface-muted-foreground">
+                      Replay buffer: <span className="font-medium text-foreground">{recordingStatus?.replayBufferStatus || 'not checked'}</span>
+                    </span>
+                  </div>
+                  {(recordingStatus?.obsVersion || recordingStatus?.obsWebSocketVersion) && (
+                    <p className="mt-2 text-xs text-surface-muted-foreground">
+                      OBS {recordingStatus.obsVersion || 'unknown'} · WebSocket {recordingStatus.obsWebSocketVersion || 'unknown'}
+                    </p>
+                  )}
+                  {recordingStatus?.lastError && (
+                    <p className="mt-2 text-xs text-destructive">{recordingStatus.lastError}</p>
+                  )}
+                </div>
+
                 <SettingsField label="Recording Folder" description="Default: $HOME/.refleks/recordings">
                   <div className="flex flex-wrap gap-2">
                     <Input
@@ -441,7 +488,7 @@ export function SettingsPage() {
                   </div>
                 </SettingsField>
 
-                <SettingsField label="Default Save Policy" description="Policy evaluation later">
+                <SettingsField label="Default Save Policy" description="Policy evaluation.">
                   <Select value={recording.savePolicy} onValueChange={v => updateRecordingField('savePolicy', v as RecordingSettings['savePolicy'], true)}>
                     <SelectTrigger className="h-8 w-max min-w-[12rem] text-xs">
                       <SelectValue />
@@ -492,7 +539,7 @@ export function SettingsPage() {
                   </SettingsField>
                 </div>
 
-                <SettingsField label="Auto Cleanup" description="Clean up videos" checkbox>
+                <SettingsField label="Auto Cleanup" description="Cleanup videos." checkbox>
                   <Checkbox
                     checked={!!recording.autoCleanup}
                     onCheckedChange={v => updateRecordingField('autoCleanup', v === true, true)}

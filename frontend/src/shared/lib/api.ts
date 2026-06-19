@@ -28,6 +28,7 @@ import {
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
   StartWatcher as _StartWatcher,
   StopWatcher as _StopWatcher,
+  TestRecordingConnection as _TestRecordingConnection,
   UpdateSettings as _UpdateSettings
 } from '@wails/go/main/App'
 import type { Benchmark, BenchmarkProgress, KovaaksLastScore, RecordingRecord, RecordingRuntimeStatus, RunRecord, Settings, UpdateInfo } from '../types/ipc'
@@ -90,6 +91,11 @@ export async function resetSettings(config: boolean, favorites: boolean, scenari
 
 export async function getRecordingStatus(): Promise<RecordingRuntimeStatus> {
   const res = await _GetRecordingStatus()
+  return res as unknown as RecordingRuntimeStatus
+}
+
+export async function testRecordingConnection(): Promise<RecordingRuntimeStatus> {
+  const res = await _TestRecordingConnection()
   return res as unknown as RecordingRuntimeStatus
 }
 

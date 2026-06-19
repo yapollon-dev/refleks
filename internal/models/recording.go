@@ -57,12 +57,14 @@ type RecordingRecord struct {
 }
 
 type RecordingRuntimeStatus struct {
-	Enabled            bool   `json:"enabled"`
-	RecordingDir       string `json:"recordingDir"`
-	MetadataPath       string `json:"metadataPath"`
-	TotalRecordings    int    `json:"totalRecordings"`
-	TotalSizeBytes     int64  `json:"totalSizeBytes"`
-	ConnectionStatus   string `json:"connectionStatus"`
-	ReplayBufferStatus string `json:"replayBufferStatus"`
-	LastError          string `json:"lastError,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	RecordingDir        string `json:"recordingDir"`
+	MetadataPath        string `json:"metadataPath"`
+	TotalRecordings     int    `json:"totalRecordings"`
+	TotalSizeBytes      int64  `json:"totalSizeBytes"`
+	ConnectionStatus    string `json:"connectionStatus"`
+	ReplayBufferStatus  string `json:"replayBufferStatus"`
+	OBSVersion          string `json:"obsVersion,omitempty"`
+	OBSWebSocketVersion string `json:"obsWebSocketVersion,omitempty"`
+	LastError           string `json:"lastError,omitempty"`
 }

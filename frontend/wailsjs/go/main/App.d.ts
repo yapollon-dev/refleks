@@ -62,4 +62,6 @@ export function StartWatcher(arg1:string):Promise<void>;
 
 export function StopWatcher():Promise<void>;
 
+export function TestRecordingConnection():Promise<models.RecordingRuntimeStatus>;
+
 export function UpdateSettings(arg1:models.Settings):Promise<void>;

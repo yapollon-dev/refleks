@@ -265,6 +265,18 @@ func (a *App) GetRecordingStatus() models.RecordingRuntimeStatus {
 	return a.recordingSvc.Status()
 }
 
+// TestRecordingConnection connects to OBS and reads version/replay-buffer status without saving a replay.
+func (a *App) TestRecordingConnection() models.RecordingRuntimeStatus {
+	if a.recordingSvc == nil {
+		return models.RecordingRuntimeStatus{
+			ConnectionStatus:   "error",
+			ReplayBufferStatus: "unknown",
+			LastError:          "recording service is not initialized",
+		}
+	}
+	return a.recordingSvc.TestConnection(a.ctx)
+}
+
 // GetRecordings returns persisted recording metadata.
 func (a *App) GetRecordings() ([]models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
