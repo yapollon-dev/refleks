@@ -69,9 +69,43 @@ type RecordingRuntimeStatus struct {
 	MetadataPath        string `json:"metadataPath"`
 	TotalRecordings     int    `json:"totalRecordings"`
 	TotalSizeBytes      int64  `json:"totalSizeBytes"`
+	StorageLimitBytes   int64  `json:"storageLimitBytes"`
+	MinFreeSpaceBytes   int64  `json:"minFreeSpaceBytes"`
+	FreeSpaceBytes      int64  `json:"freeSpaceBytes"`
 	ConnectionStatus    string `json:"connectionStatus"`
 	ReplayBufferStatus  string `json:"replayBufferStatus"`
 	OBSVersion          string `json:"obsVersion,omitempty"`
 	OBSWebSocketVersion string `json:"obsWebSocketVersion,omitempty"`
 	LastError           string `json:"lastError,omitempty"`
+}
+
+type RecordingCleanupItem struct {
+	ID         string              `json:"id"`
+	Scenario   string              `json:"scenario"`
+	VideoPath  string              `json:"videoPath"`
+	SizeBytes  int64               `json:"sizeBytes"`
+	KeepReason RecordingKeepReason `json:"keepReason"`
+	CreatedAt  string              `json:"createdAt"`
+	Protected  bool                `json:"protected"`
+	PBAtSave   bool                `json:"pbAtSave"`
+}
+
+type RecordingCleanupPreview struct {
+	TotalSizeBytes           int64                  `json:"totalSizeBytes"`
+	StorageLimitBytes        int64                  `json:"storageLimitBytes"`
+	MinFreeSpaceBytes        int64                  `json:"minFreeSpaceBytes"`
+	FreeSpaceBytes           int64                  `json:"freeSpaceBytes"`
+	RequiredBytes            int64                  `json:"requiredBytes"`
+	ReclaimableBytes         int64                  `json:"reclaimableBytes"`
+	PlannedDeleteBytes       int64                  `json:"plannedDeleteBytes"`
+	PlannedDeleteCount       int                    `json:"plannedDeleteCount"`
+	EligibleCount            int                    `json:"eligibleCount"`
+	ExcludedProtectedCount   int                    `json:"excludedProtectedCount"`
+	ExcludedPBCount          int                    `json:"excludedPbCount"`
+	ExcludedUnavailableCount int                    `json:"excludedUnavailableCount"`
+	WillMeetLimits           bool                   `json:"willMeetLimits"`
+	Reason                   string                 `json:"reason"`
+	Items                    []RecordingCleanupItem `json:"items"`
+	DeletedCount             int                    `json:"deletedCount"`
+	DeletedBytes             int64                  `json:"deletedBytes"`
 }

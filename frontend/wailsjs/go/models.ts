@@ -361,6 +361,94 @@ export namespace models {
 
 
 
+	export class RecordingCleanupItem {
+	    id: string;
+	    scenario: string;
+	    videoPath: string;
+	    sizeBytes: number;
+	    keepReason: string;
+	    createdAt: string;
+	    protected: boolean;
+	    pbAtSave: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new RecordingCleanupItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.scenario = source["scenario"];
+	        this.videoPath = source["videoPath"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.keepReason = source["keepReason"];
+	        this.createdAt = source["createdAt"];
+	        this.protected = source["protected"];
+	        this.pbAtSave = source["pbAtSave"];
+	    }
+	}
+	export class RecordingCleanupPreview {
+	    totalSizeBytes: number;
+	    storageLimitBytes: number;
+	    minFreeSpaceBytes: number;
+	    freeSpaceBytes: number;
+	    requiredBytes: number;
+	    reclaimableBytes: number;
+	    plannedDeleteBytes: number;
+	    plannedDeleteCount: number;
+	    eligibleCount: number;
+	    excludedProtectedCount: number;
+	    excludedPbCount: number;
+	    excludedUnavailableCount: number;
+	    willMeetLimits: boolean;
+	    reason: string;
+	    items: RecordingCleanupItem[];
+	    deletedCount: number;
+	    deletedBytes: number;
+
+	    static createFrom(source: any = {}) {
+	        return new RecordingCleanupPreview(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalSizeBytes = source["totalSizeBytes"];
+	        this.storageLimitBytes = source["storageLimitBytes"];
+	        this.minFreeSpaceBytes = source["minFreeSpaceBytes"];
+	        this.freeSpaceBytes = source["freeSpaceBytes"];
+	        this.requiredBytes = source["requiredBytes"];
+	        this.reclaimableBytes = source["reclaimableBytes"];
+	        this.plannedDeleteBytes = source["plannedDeleteBytes"];
+	        this.plannedDeleteCount = source["plannedDeleteCount"];
+	        this.eligibleCount = source["eligibleCount"];
+	        this.excludedProtectedCount = source["excludedProtectedCount"];
+	        this.excludedPbCount = source["excludedPbCount"];
+	        this.excludedUnavailableCount = source["excludedUnavailableCount"];
+	        this.willMeetLimits = source["willMeetLimits"];
+	        this.reason = source["reason"];
+	        this.items = this.convertValues(source["items"], RecordingCleanupItem);
+	        this.deletedCount = source["deletedCount"];
+	        this.deletedBytes = source["deletedBytes"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class RecordingRecord {
 	    id: string;
 	    runId: string;
@@ -411,6 +499,9 @@ export namespace models {
 	    metadataPath: string;
 	    totalRecordings: number;
 	    totalSizeBytes: number;
+	    storageLimitBytes: number;
+	    minFreeSpaceBytes: number;
+	    freeSpaceBytes: number;
 	    connectionStatus: string;
 	    replayBufferStatus: string;
 	    obsVersion?: string;
@@ -428,6 +519,9 @@ export namespace models {
 	        this.metadataPath = source["metadataPath"];
 	        this.totalRecordings = source["totalRecordings"];
 	        this.totalSizeBytes = source["totalSizeBytes"];
+	        this.storageLimitBytes = source["storageLimitBytes"];
+	        this.minFreeSpaceBytes = source["minFreeSpaceBytes"];
+	        this.freeSpaceBytes = source["freeSpaceBytes"];
 	        this.connectionStatus = source["connectionStatus"];
 	        this.replayBufferStatus = source["replayBufferStatus"];
 	        this.obsVersion = source["obsVersion"];

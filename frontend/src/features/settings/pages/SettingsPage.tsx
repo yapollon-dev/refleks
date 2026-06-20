@@ -171,6 +171,7 @@ export function SettingsPage() {
     if (!settings) return
     setTestingRecordingConnection(true)
     try {
+      await queueSettingsSave(settings)
       const next = await testRecordingConnection()
       setRecordingStatus(next)
     } catch (e) {
@@ -180,6 +181,9 @@ export function SettingsPage() {
         metadataPath: prev?.metadataPath || '',
         totalRecordings: prev?.totalRecordings || 0,
         totalSizeBytes: prev?.totalSizeBytes || 0,
+        storageLimitBytes: prev?.storageLimitBytes || 0,
+        minFreeSpaceBytes: prev?.minFreeSpaceBytes || 0,
+        freeSpaceBytes: prev?.freeSpaceBytes || 0,
         connectionStatus: 'error',
         replayBufferStatus: 'unknown',
         lastError: (e as Error)?.message || 'Failed to test OBS connection',
@@ -535,7 +539,7 @@ export function SettingsPage() {
                 </SettingsField>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <SettingsField label="Storage Limit (GB)">
+                  <SettingsField label="Storage Limit (GB)" description="Cleanup keeps unprotected non-PB recordings under this limit.">
                     <Input
                       type="number"
                       value={recording.storageLimitGb}
@@ -545,7 +549,7 @@ export function SettingsPage() {
                       className="w-24 text-center"
                     />
                   </SettingsField>
-                  <SettingsField label="Minimum Free Space (GB)">
+                  <SettingsField label="Minimum Free Space (GB)" description="New saves are blocked if they would drop the recording drive below this free-space floor.">
                     <Input
                       type="number"
                       value={recording.minFreeSpaceGb}
@@ -558,13 +562,13 @@ export function SettingsPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <SettingsField label="Auto Connect" description="Connect to OBS automatically when later phases need it." checkbox>
+                  <SettingsField label="Auto Connect" description="Connect to OBS automatically so the replay buffer can be kept ready." checkbox>
                     <Checkbox
                       checked={!!recording.autoConnect}
                       onCheckedChange={v => updateRecordingField('autoConnect', v === true, true)}
                     />
                   </SettingsField>
-                  <SettingsField label="Auto-start Replay Buffer" description="Start OBS replay buffer automatically when later phases need it." checkbox>
+                  <SettingsField label="Auto-start Replay Buffer" description="Start OBS replay buffer automatically before recording runs." checkbox>
                     <Checkbox
                       checked={!!recording.autoStartReplayBuffer}
                       onCheckedChange={v => updateRecordingField('autoStartReplayBuffer', v === true, true)}
@@ -572,7 +576,7 @@ export function SettingsPage() {
                   </SettingsField>
                 </div>
 
-                <SettingsField label="Auto Cleanup" description="Cleanup videos." checkbox>
+                <SettingsField label="Auto Cleanup" description="After a successful save, delete oldest eligible recordings if storage limits require it." checkbox>
                   <Checkbox
                     checked={!!recording.autoCleanup}
                     onCheckedChange={v => updateRecordingField('autoCleanup', v === true, true)}

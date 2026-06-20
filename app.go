@@ -83,6 +83,7 @@ func (a *App) startup(ctx context.Context) {
 				}
 			}()
 		})
+		a.ensureRecordingReplayBufferReadyAsync()
 	}
 
 	// Initialize Autostart Service
@@ -202,7 +203,11 @@ func (a *App) GetSettings() models.Settings {
 
 // UpdateSettings updates settings and persists them; applies to watcher if needed.
 func (a *App) UpdateSettings(s models.Settings) error {
-	return a.runsRuntimeSvc.UpdateSettings(s)
+	if err := a.runsRuntimeSvc.UpdateSettings(s); err != nil {
+		return err
+	}
+	a.ensureRecordingReplayBufferReadyAsync()
+	return nil
 }
 
 // Favorites helpers
@@ -300,6 +305,62 @@ func (a *App) GetRecordings() ([]models.RecordingRecord, error) {
 		return []models.RecordingRecord{}, nil
 	}
 	return a.recordingSvc.List()
+}
+
+// RefreshRecordingFiles detects missing or recovered video files in recording metadata.
+func (a *App) RefreshRecordingFiles() ([]models.RecordingRecord, error) {
+	if a.recordingSvc == nil {
+		return []models.RecordingRecord{}, nil
+	}
+	return a.recordingSvc.RefreshMissingFiles()
+}
+
+// OpenRecording launches a saved video with the OS default application.
+func (a *App) OpenRecording(id string) error {
+	if a.recordingSvc == nil {
+		return fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.OpenRecording(id)
+}
+
+// RevealRecording selects a saved video in Explorer.
+func (a *App) RevealRecording(id string) error {
+	if a.recordingSvc == nil {
+		return fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.RevealRecording(id)
+}
+
+// SetRecordingProtected updates the cleanup protection flag for a recording.
+func (a *App) SetRecordingProtected(id string, protected bool) (models.RecordingRecord, error) {
+	if a.recordingSvc == nil {
+		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.SetProtected(id, protected)
+}
+
+// DeleteRecording deletes one recording metadata row and its video file without deleting the run.
+func (a *App) DeleteRecording(id string) error {
+	if a.recordingSvc == nil {
+		return fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.DeleteRecording(id)
+}
+
+// PreviewRecordingCleanup shows which unprotected non-PB recordings cleanup would remove.
+func (a *App) PreviewRecordingCleanup() (models.RecordingCleanupPreview, error) {
+	if a.recordingSvc == nil {
+		return models.RecordingCleanupPreview{}, nil
+	}
+	return a.recordingSvc.PreviewCleanup()
+}
+
+// RunRecordingCleanup deletes cleanup candidates and their metadata without deleting linked runs.
+func (a *App) RunRecordingCleanup() (models.RecordingCleanupPreview, error) {
+	if a.recordingSvc == nil {
+		return models.RecordingCleanupPreview{}, fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.RunCleanup()
 }
 
 // GetRecordingDirectory returns the configured local recording folder.
@@ -471,4 +532,20 @@ func (a *App) shouldRunInBackground() bool {
 
 func (a *App) hideWindow() {
 	runtime.WindowHide(a.ctx)
+}
+
+func (a *App) ensureRecordingReplayBufferReadyAsync() {
+	if a.recordingSvc == nil || a.ctx == nil {
+		return
+	}
+	recordingSettings := a.settingsSvc.Get().Recording
+	if !recordingSettings.Enabled || !recordingSettings.AutoConnect || !recordingSettings.AutoStartReplayBuffer {
+		return
+	}
+	go func() {
+		status := a.recordingSvc.EnsureReplayBufferStarted(a.ctx)
+		if status.LastError != "" {
+			runtime.LogWarningf(a.ctx, "recording replay buffer auto-start failed: %s", status.LastError)
+		}
+	}()
 }

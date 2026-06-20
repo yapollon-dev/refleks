@@ -1,6 +1,7 @@
 import {
   CheckForUpdates as _CheckForUpdates,
   ClearCache as _ClearCache,
+  DeleteRecording as _DeleteRecording,
   DownloadAndInstallUpdate as _DownloadAndInstallUpdate,
   GetAllBenchmarkProgresses as _GetAllBenchmarkProgresses,
   GetBenchmarkProgress as _GetBenchmarkProgress,
@@ -19,20 +20,26 @@ import {
   LaunchKovaaksPlaylist as _LaunchKovaaksPlaylist,
   LaunchKovaaksScenario as _LaunchKovaaksScenario,
   QuitApp as _QuitApp,
+  OpenRecording as _OpenRecording,
+  PreviewRecordingCleanup as _PreviewRecordingCleanup,
   RefreshAllBenchmarkProgresses as _RefreshAllBenchmarkProgresses,
+  RefreshRecordingFiles as _RefreshRecordingFiles,
   ResetSettings as _ResetSettings,
+  RevealRecording as _RevealRecording,
+  RunRecordingCleanup as _RunRecordingCleanup,
   SaveReplayForLatestRun as _SaveReplayForLatestRun,
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
   SelectRecordingDirectory as _SelectRecordingDirectory,
   SetAutostart as _SetAutostart,
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
+  SetRecordingProtected as _SetRecordingProtected,
   StartWatcher as _StartWatcher,
   StopWatcher as _StopWatcher,
   TestRecordingConnection as _TestRecordingConnection,
   UpdateSettings as _UpdateSettings
 } from '@wails/go/main/App'
-import type { Benchmark, BenchmarkProgress, KovaaksLastScore, RecordingRecord, RecordingRuntimeStatus, RunRecord, Settings, UpdateInfo } from '../types/ipc'
+import type { Benchmark, BenchmarkProgress, KovaaksLastScore, RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RunRecord, Settings, UpdateInfo } from '../types/ipc'
 
 // Typed wrappers around Wails-generated bindings with normalized results
 
@@ -103,6 +110,38 @@ export async function testRecordingConnection(): Promise<RecordingRuntimeStatus>
 export async function getRecordings(): Promise<RecordingRecord[]> {
   const res = await _GetRecordings()
   return (Array.isArray(res) ? res : []) as unknown as RecordingRecord[]
+}
+
+export async function refreshRecordingFiles(): Promise<RecordingRecord[]> {
+  const res = await _RefreshRecordingFiles()
+  return (Array.isArray(res) ? res : []) as unknown as RecordingRecord[]
+}
+
+export async function openRecording(id: string): Promise<void> {
+  await _OpenRecording(id)
+}
+
+export async function revealRecording(id: string): Promise<void> {
+  await _RevealRecording(id)
+}
+
+export async function setRecordingProtected(id: string, protectedValue: boolean): Promise<RecordingRecord> {
+  const res = await _SetRecordingProtected(id, protectedValue)
+  return res as unknown as RecordingRecord
+}
+
+export async function deleteRecording(id: string): Promise<void> {
+  await _DeleteRecording(id)
+}
+
+export async function previewRecordingCleanup(): Promise<RecordingCleanupPreview> {
+  const res = await _PreviewRecordingCleanup()
+  return res as unknown as RecordingCleanupPreview
+}
+
+export async function runRecordingCleanup(): Promise<RecordingCleanupPreview> {
+  const res = await _RunRecordingCleanup()
+  return res as unknown as RecordingCleanupPreview
 }
 
 export async function getRecordingDirectory(): Promise<string> {

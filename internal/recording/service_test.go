@@ -1,6 +1,7 @@
 package recording
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -64,5 +65,40 @@ func TestNewRecordingRecordLinksRunAndReason(t *testing.T) {
 	}
 	if record.Status != models.RecordingStatusPending {
 		t.Fatalf("status = %q, want pending", record.Status)
+	}
+}
+
+func TestTestConnectionStartsReplayBufferWhenAutoStartEnabled(t *testing.T) {
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = false
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = true
+	cfg.AutoConnect = true
+	cfg.AutoStartReplayBuffer = true
+	service := newStorageTestService(t, cfg)
+
+	status := service.TestConnection(context.Background())
+	if status.ConnectionStatus != "connected" || status.ReplayBufferStatus != "active" {
+		t.Fatalf("test connection should start replay buffer, got %#v", status)
+	}
+	if status.LastError != "" {
+		t.Fatalf("unexpected status error: %#v", status)
+	}
+}
+
+func TestEnsureReplayBufferStartedNoopsWhenRecordingDisabled(t *testing.T) {
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = false
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = false
+	cfg.AutoConnect = true
+	cfg.AutoStartReplayBuffer = true
+	service := newStorageTestService(t, cfg)
+
+	status := service.EnsureReplayBufferStarted(context.Background())
+	if status.ConnectionStatus == "connected" || status.ReplayBufferStatus == "active" {
+		t.Fatalf("disabled recording should not connect/start replay buffer: %#v", status)
 	}
 }

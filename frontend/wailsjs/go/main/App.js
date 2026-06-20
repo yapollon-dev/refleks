@@ -10,6 +10,10 @@ export function ClearCache() {
   return window['go']['main']['App']['ClearCache']();
 }
 
+export function DeleteRecording(arg1) {
+  return window['go']['main']['App']['DeleteRecording'](arg1);
+}
+
 export function DownloadAndInstallUpdate(arg1) {
   return window['go']['main']['App']['DownloadAndInstallUpdate'](arg1);
 }
@@ -78,6 +82,14 @@ export function LaunchKovaaksScenario(arg1, arg2) {
   return window['go']['main']['App']['LaunchKovaaksScenario'](arg1, arg2);
 }
 
+export function OpenRecording(arg1) {
+  return window['go']['main']['App']['OpenRecording'](arg1);
+}
+
+export function PreviewRecordingCleanup() {
+  return window['go']['main']['App']['PreviewRecordingCleanup']();
+}
+
 export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }
@@ -86,8 +98,20 @@ export function RefreshAllBenchmarkProgresses() {
   return window['go']['main']['App']['RefreshAllBenchmarkProgresses']();
 }
 
+export function RefreshRecordingFiles() {
+  return window['go']['main']['App']['RefreshRecordingFiles']();
+}
+
 export function ResetSettings(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ResetSettings'](arg1, arg2, arg3, arg4);
+}
+
+export function RevealRecording(arg1) {
+  return window['go']['main']['App']['RevealRecording'](arg1);
+}
+
+export function RunRecordingCleanup() {
+  return window['go']['main']['App']['RunRecordingCleanup']();
 }
 
 export function SaveReplayForLatestRun() {
@@ -112,6 +136,10 @@ export function SetAutostart(arg1) {
 
 export function SetFavoriteBenchmarks(arg1) {
   return window['go']['main']['App']['SetFavoriteBenchmarks'](arg1);
+}
+
+export function SetRecordingProtected(arg1, arg2) {
+  return window['go']['main']['App']['SetRecordingProtected'](arg1, arg2);
 }
 
 export function ShowWindow() {
