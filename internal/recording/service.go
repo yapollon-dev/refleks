@@ -33,9 +33,13 @@ func NewService(settingsSvc *appsettings.Service, runStore *runs.Store) (*Servic
 	if err != nil {
 		return nil, err
 	}
+	metadata := NewMetadataStore(path)
+	if err := metadata.CompactLegacySkipped(); err != nil {
+		return nil, err
+	}
 	return &Service{
 		settingsSvc: settingsSvc,
-		metadata:    NewMetadataStore(path),
+		metadata:    metadata,
 		runStore:    runStore,
 	}, nil
 }
@@ -59,8 +63,15 @@ func (s *Service) Status() models.RecordingRuntimeStatus {
 	s.mu.RUnlock()
 
 	if last.ConnectionStatus != "" {
-		status.ConnectionStatus = last.ConnectionStatus
+		if last.ConnectionStatus == "connected" {
+			status.ConnectionStatus = "not_connected"
+		} else {
+			status.ConnectionStatus = last.ConnectionStatus
+		}
 		status.ReplayBufferStatus = last.ReplayBufferStatus
+		status.LastConnectionStatus = last.LastConnectionStatus
+		status.LastConnectionCheckedAt = last.LastConnectionCheckedAt
+		status.LastReplayBufferStatus = last.LastReplayBufferStatus
 		status.OBSVersion = last.OBSVersion
 		status.OBSWebSocketVersion = last.OBSWebSocketVersion
 		status.LastError = last.LastError
@@ -83,19 +94,25 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
-		status.ConnectionStatus = classifyConnectionError(err)
+		status.ConnectionStatus = "not_connected"
+		status.LastConnectionStatus = classifyConnectionError(err)
+		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
 	}
 	defer client.Close()
 
-	status.ConnectionStatus = "connected"
+	status.ConnectionStatus = "not_connected"
+	status.LastConnectionStatus = "connected"
+	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 	version, err := client.GetVersion(ctx)
 	if err != nil {
-		status.ConnectionStatus = "error"
+		status.LastConnectionStatus = "error"
 		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -106,6 +123,7 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	replay, err := client.GetReplayBufferStatus(ctx)
 	if err != nil {
 		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -115,15 +133,73 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	} else {
 		status.ReplayBufferStatus = "inactive"
 	}
-	if !replay.Active && cfg.Enabled && cfg.AutoConnect && cfg.AutoStartReplayBuffer {
-		if err := client.StartReplayBuffer(ctx); err != nil {
-			status.ReplayBufferStatus = "inactive"
-			status.LastError = "failed to start OBS replay buffer: " + err.Error()
-			s.cacheStatus(status)
-			return status
-		}
-		status.ReplayBufferStatus = "active"
+	status.LastReplayBufferStatus = status.ReplayBufferStatus
+	status.LastError = ""
+	s.cacheStatus(status)
+	return status
+}
+
+func (s *Service) StartReplayBuffer(ctx context.Context) models.RecordingRuntimeStatus {
+	status := s.localStatus()
+	if s == nil || s.settingsSvc == nil {
+		status.ConnectionStatus = "not_connected"
+		status.LastConnectionStatus = "error"
+		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
+		status.LastError = "recording service is not initialized"
+		return status
 	}
+
+	cfg := s.settingsSvc.Get().Recording
+	client := NewOBSClient(cfg)
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		status.ConnectionStatus = "not_connected"
+		status.LastConnectionStatus = classifyConnectionError(err)
+		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
+		status.LastError = err.Error()
+		s.cacheStatus(status)
+		return status
+	}
+	defer client.Close()
+
+	status.ConnectionStatus = "not_connected"
+	status.LastConnectionStatus = "connected"
+	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+	if version, err := client.GetVersion(ctx); err == nil {
+		status.OBSVersion = version.OBSVersion
+		status.OBSWebSocketVersion = version.OBSWebSocketVersion
+	}
+
+	replay, err := client.GetReplayBufferStatus(ctx)
+	if err != nil {
+		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
+		status.LastError = err.Error()
+		s.cacheStatus(status)
+		return status
+	}
+	if replay.Active {
+		status.ReplayBufferStatus = "active"
+		status.LastReplayBufferStatus = "active"
+		status.LastError = ""
+		s.cacheStatus(status)
+		return status
+	}
+	if err := client.StartReplayBuffer(ctx); err != nil {
+		status.ReplayBufferStatus = "inactive"
+		status.LastReplayBufferStatus = "inactive"
+		status.LastError = "failed to start OBS replay buffer: " + err.Error()
+		s.cacheStatus(status)
+		return status
+	}
+	status.ReplayBufferStatus = "active"
+	status.LastReplayBufferStatus = "active"
 	status.LastError = ""
 	s.cacheStatus(status)
 	return status
@@ -132,8 +208,11 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.RecordingRuntimeStatus {
 	status := s.localStatus()
 	if s == nil || s.settingsSvc == nil {
-		status.ConnectionStatus = "error"
+		status.ConnectionStatus = "not_connected"
+		status.LastConnectionStatus = "error"
+		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
 		status.LastError = "recording service is not initialized"
 		return status
 	}
@@ -148,22 +227,29 @@ func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.Recordin
 	defer cancel()
 
 	if err := client.Connect(ctx); err != nil {
-		status.ConnectionStatus = classifyConnectionError(err)
+		status.ConnectionStatus = "not_connected"
+		status.LastConnectionStatus = classifyConnectionError(err)
+		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
+		status.LastReplayBufferStatus = "unknown"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
 	}
 	defer client.Close()
 
-	status.ConnectionStatus = "connected"
+	status.ConnectionStatus = "not_connected"
+	status.LastConnectionStatus = "connected"
+	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 	if _, err := s.ensureReplayBuffer(ctx, client, cfg); err != nil {
 		status.ReplayBufferStatus = "inactive"
+		status.LastReplayBufferStatus = "inactive"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
 	}
 	status.ReplayBufferStatus = "active"
+	status.LastReplayBufferStatus = "active"
 	status.LastError = ""
 	s.cacheStatus(status)
 	return status
@@ -213,11 +299,7 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 	}
 	decision := EvaluatePolicy(cfg, rec, allRuns)
 	if !decision.ShouldSave {
-		record, err := s.upsertAutoAttemptStatus(rec, decision.Reason, decision.PBAtSave, importedAt, models.RecordingStatusSkipped, "")
-		if err != nil {
-			return models.RecordingRecord{}, err
-		}
-		return record, nil
+		return models.RecordingRecord{}, nil
 	}
 	if !cfg.AutoConnect {
 		record, err := s.upsertAutoAttemptStatus(rec, decision.Reason, decision.PBAtSave, importedAt, models.RecordingStatusFailed, "automatic OBS connection is disabled")
@@ -464,9 +546,13 @@ func (s *Service) localStatus() models.RecordingRuntimeStatus {
 		status.LastError = err.Error()
 		return status
 	}
-	status.TotalRecordings = len(records)
 	for _, record := range records {
-		status.TotalSizeBytes += record.SizeBytes
+		if recordingCountsAsSaved(record) {
+			status.TotalRecordings++
+		}
+		if recordingCountsTowardStorage(record) {
+			status.TotalSizeBytes += record.SizeBytes
+		}
 	}
 	status.StorageLimitBytes = gbToBytes(cfg.StorageLimitGB)
 	status.MinFreeSpaceBytes = gbToBytes(cfg.MinFreeSpaceGB)

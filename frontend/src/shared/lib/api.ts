@@ -34,6 +34,7 @@ import {
   SetAutostart as _SetAutostart,
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
   SetRecordingProtected as _SetRecordingProtected,
+  StartRecordingReplayBuffer as _StartRecordingReplayBuffer,
   StartWatcher as _StartWatcher,
   StopWatcher as _StopWatcher,
   TestRecordingConnection as _TestRecordingConnection,
@@ -104,6 +105,11 @@ export async function getRecordingStatus(): Promise<RecordingRuntimeStatus> {
 
 export async function testRecordingConnection(): Promise<RecordingRuntimeStatus> {
   const res = await _TestRecordingConnection()
+  return res as unknown as RecordingRuntimeStatus
+}
+
+export async function startRecordingReplayBuffer(): Promise<RecordingRuntimeStatus> {
+  const res = await _StartRecordingReplayBuffer()
   return res as unknown as RecordingRuntimeStatus
 }
 

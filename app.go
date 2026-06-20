@@ -78,8 +78,13 @@ func (a *App) startup(ctx context.Context) {
 	if a.recordingSvc != nil {
 		a.runsRuntimeSvc.SetOnRunParsed(func(rec models.RunRecord) {
 			go func() {
-				if _, err := a.recordingSvc.HandleCompletedRun(a.ctx, rec); err != nil {
+				record, err := a.recordingSvc.HandleCompletedRun(a.ctx, rec)
+				if err != nil {
 					runtime.LogWarningf(a.ctx, "auto recording failed for %s: %v", rec.FileName, err)
+				}
+				if record.ID != "" || err != nil {
+					a.emitRecordingsChanged()
+					a.emitRecordingStatusChanged()
 				}
 			}()
 		})
@@ -198,7 +203,7 @@ func (a *App) RefreshAllBenchmarkProgresses() (map[int]models.BenchmarkProgress,
 
 // GetSettings returns the current settings.
 func (a *App) GetSettings() models.Settings {
-	return a.settingsSvc.Get()
+	return a.settingsSvc.GetForFrontend()
 }
 
 // UpdateSettings updates settings and persists them; applies to watcher if needed.
@@ -206,6 +211,7 @@ func (a *App) UpdateSettings(s models.Settings) error {
 	if err := a.runsRuntimeSvc.UpdateSettings(s); err != nil {
 		return err
 	}
+	a.emitRecordingStatusChanged()
 	a.ensureRecordingReplayBufferReadyAsync()
 	return nil
 }
@@ -288,7 +294,25 @@ func (a *App) TestRecordingConnection() models.RecordingRuntimeStatus {
 			LastError:          "recording service is not initialized",
 		}
 	}
-	return a.recordingSvc.TestConnection(a.ctx)
+	status := a.recordingSvc.TestConnection(a.ctx)
+	a.emitRecordingStatusChanged()
+	return status
+}
+
+// StartRecordingReplayBuffer explicitly starts the OBS replay buffer without saving a clip.
+func (a *App) StartRecordingReplayBuffer() models.RecordingRuntimeStatus {
+	if a.recordingSvc == nil {
+		return models.RecordingRuntimeStatus{
+			ConnectionStatus:       "not_connected",
+			ReplayBufferStatus:     "unknown",
+			LastConnectionStatus:   "error",
+			LastReplayBufferStatus: "unknown",
+			LastError:              "recording service is not initialized",
+		}
+	}
+	status := a.recordingSvc.StartReplayBuffer(a.ctx)
+	a.emitRecordingStatusChanged()
+	return status
 }
 
 // SaveCurrentReplay manually saves the current OBS replay buffer, optionally linked to an explicitly selected run.
@@ -296,7 +320,10 @@ func (a *App) SaveCurrentReplay(runID string) (models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
 		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.SaveCurrentReplay(a.ctx, runID)
+	record, err := a.recordingSvc.SaveCurrentReplay(a.ctx, runID)
+	a.emitRecordingsChanged()
+	a.emitRecordingStatusChanged()
+	return record, err
 }
 
 // SaveReplayForLatestRun is kept for older generated clients; it now saves an unlinked manual replay.
@@ -304,7 +331,10 @@ func (a *App) SaveReplayForLatestRun() (models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
 		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.SaveCurrentReplay(a.ctx, "")
+	record, err := a.recordingSvc.SaveCurrentReplay(a.ctx, "")
+	a.emitRecordingsChanged()
+	a.emitRecordingStatusChanged()
+	return record, err
 }
 
 // GetRecordings returns persisted recording metadata.
@@ -320,7 +350,12 @@ func (a *App) RefreshRecordingFiles() ([]models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
 		return []models.RecordingRecord{}, nil
 	}
-	return a.recordingSvc.RefreshMissingFiles()
+	records, err := a.recordingSvc.RefreshMissingFiles()
+	if err == nil {
+		a.emitRecordingsChanged()
+		a.emitRecordingStatusChanged()
+	}
+	return records, err
 }
 
 // OpenRecording launches a saved video with the OS default application.
@@ -344,7 +379,11 @@ func (a *App) SetRecordingProtected(id string, protected bool) (models.Recording
 	if a.recordingSvc == nil {
 		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.SetProtected(id, protected)
+	record, err := a.recordingSvc.SetProtected(id, protected)
+	if err == nil {
+		a.emitRecordingsChanged()
+	}
+	return record, err
 }
 
 // DeleteRecording deletes one recording metadata row and its video file without deleting the run.
@@ -352,7 +391,12 @@ func (a *App) DeleteRecording(id string) error {
 	if a.recordingSvc == nil {
 		return fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.DeleteRecording(id)
+	if err := a.recordingSvc.DeleteRecording(id); err != nil {
+		return err
+	}
+	a.emitRecordingsChanged()
+	a.emitRecordingStatusChanged()
+	return nil
 }
 
 // PreviewRecordingCleanup shows which unprotected non-PB recordings cleanup would remove.
@@ -368,7 +412,12 @@ func (a *App) RunRecordingCleanup() (models.RecordingCleanupPreview, error) {
 	if a.recordingSvc == nil {
 		return models.RecordingCleanupPreview{}, fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.RunCleanup()
+	preview, err := a.recordingSvc.RunCleanup()
+	if err == nil {
+		a.emitRecordingsChanged()
+		a.emitRecordingStatusChanged()
+	}
+	return preview, err
 }
 
 // GetRecordingDirectory returns the configured local recording folder.
@@ -555,5 +604,20 @@ func (a *App) ensureRecordingReplayBufferReadyAsync() {
 		if status.LastError != "" {
 			runtime.LogWarningf(a.ctx, "recording replay buffer auto-start failed: %s", status.LastError)
 		}
+		a.emitRecordingStatusChanged()
 	}()
+}
+
+func (a *App) emitRecordingsChanged() {
+	if a == nil || a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, constants.EventRecordingsChanged)
+}
+
+func (a *App) emitRecordingStatusChanged() {
+	if a == nil || a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, constants.EventRecordingStatusChanged)
 }

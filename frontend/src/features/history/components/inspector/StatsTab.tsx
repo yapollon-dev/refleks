@@ -8,6 +8,7 @@ import {
   setRecordingProtected,
 } from '@/shared/lib'
 import type { RecordingRecord, StatKey } from '@/shared/types'
+import { EventsOn } from '@wails/runtime'
 import { ArrowRightLeft, ExternalLink, FolderOpen, Lock, LockOpen, PinOff, RefreshCw, Trash2, Video } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -176,6 +177,13 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
 
   useEffect(() => {
     void load()
+  }, [runKey])
+
+  useEffect(() => {
+    const off = EventsOn('recordings:changed', () => {
+      void load()
+    })
+    return () => off()
   }, [runKey])
 
   const handleRefresh = async () => {

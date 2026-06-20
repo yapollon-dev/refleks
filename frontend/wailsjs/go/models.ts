@@ -518,6 +518,9 @@ export namespace models {
 	    freeSpaceBytes: number;
 	    connectionStatus: string;
 	    replayBufferStatus: string;
+	    lastConnectionStatus?: string;
+	    lastConnectionCheckedAt?: string;
+	    lastReplayBufferStatus?: string;
 	    obsVersion?: string;
 	    obsWebSocketVersion?: string;
 	    lastError?: string;
@@ -538,6 +541,9 @@ export namespace models {
 	        this.freeSpaceBytes = source["freeSpaceBytes"];
 	        this.connectionStatus = source["connectionStatus"];
 	        this.replayBufferStatus = source["replayBufferStatus"];
+	        this.lastConnectionStatus = source["lastConnectionStatus"];
+	        this.lastConnectionCheckedAt = source["lastConnectionCheckedAt"];
+	        this.lastReplayBufferStatus = source["lastReplayBufferStatus"];
 	        this.obsVersion = source["obsVersion"];
 	        this.obsWebSocketVersion = source["obsWebSocketVersion"];
 	        this.lastError = source["lastError"];
@@ -548,6 +554,8 @@ export namespace models {
 	    obsHost: string;
 	    obsPort: number;
 	    obsPassword?: string;
+	    obsPasswordProtected?: string;
+	    obsPasswordSet?: boolean;
 	    autoConnect: boolean;
 	    autoStartReplayBuffer: boolean;
 	    savePolicy: string;
@@ -568,6 +576,8 @@ export namespace models {
 	        this.obsHost = source["obsHost"];
 	        this.obsPort = source["obsPort"];
 	        this.obsPassword = source["obsPassword"];
+	        this.obsPasswordProtected = source["obsPasswordProtected"];
+	        this.obsPasswordSet = source["obsPasswordSet"];
 	        this.autoConnect = source["autoConnect"];
 	        this.autoStartReplayBuffer = source["autoStartReplayBuffer"];
 	        this.savePolicy = source["savePolicy"];

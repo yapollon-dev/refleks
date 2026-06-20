@@ -150,6 +150,10 @@ export function ShowWindow() {
   return window['go']['main']['App']['ShowWindow']();
 }
 
+export function StartRecordingReplayBuffer() {
+  return window['go']['main']['App']['StartRecordingReplayBuffer']();
+}
+
 export function StartWatcher(arg1) {
   return window['go']['main']['App']['StartWatcher'](arg1);
 }

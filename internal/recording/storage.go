@@ -241,11 +241,19 @@ func cleanupSortTime(record models.RecordingRecord) time.Time {
 func recordingStorageUsage(records []models.RecordingRecord) int64 {
 	var total int64
 	for _, record := range records {
-		if record.SizeBytes > 0 {
+		if recordingCountsTowardStorage(record) {
 			total += record.SizeBytes
 		}
 	}
 	return total
+}
+
+func recordingCountsAsSaved(record models.RecordingRecord) bool {
+	return record.Status == models.RecordingStatusSaved && strings.TrimSpace(record.VideoPath) != ""
+}
+
+func recordingCountsTowardStorage(record models.RecordingRecord) bool {
+	return recordingCountsAsSaved(record) && record.SizeBytes > 0
 }
 
 func requiredCleanupBytes(totalSize, storageLimit, freeBytes, minFreeBytes int64) int64 {

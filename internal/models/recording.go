@@ -35,6 +35,8 @@ type RecordingSettings struct {
 	OBSHost               string          `json:"obsHost"`
 	OBSPort               int             `json:"obsPort"`
 	OBSPassword           string          `json:"obsPassword,omitempty"`
+	OBSPasswordProtected  string          `json:"obsPasswordProtected,omitempty"`
+	OBSPasswordSet        bool            `json:"obsPasswordSet,omitempty"`
 	AutoConnect           bool            `json:"autoConnect"`
 	AutoStartReplayBuffer bool            `json:"autoStartReplayBuffer"`
 	SavePolicy            RecordingPolicy `json:"savePolicy"`
@@ -74,19 +76,22 @@ type RecordingRecord struct {
 }
 
 type RecordingRuntimeStatus struct {
-	Enabled             bool   `json:"enabled"`
-	RecordingDir        string `json:"recordingDir"`
-	MetadataPath        string `json:"metadataPath"`
-	TotalRecordings     int    `json:"totalRecordings"`
-	TotalSizeBytes      int64  `json:"totalSizeBytes"`
-	StorageLimitBytes   int64  `json:"storageLimitBytes"`
-	MinFreeSpaceBytes   int64  `json:"minFreeSpaceBytes"`
-	FreeSpaceBytes      int64  `json:"freeSpaceBytes"`
-	ConnectionStatus    string `json:"connectionStatus"`
-	ReplayBufferStatus  string `json:"replayBufferStatus"`
-	OBSVersion          string `json:"obsVersion,omitempty"`
-	OBSWebSocketVersion string `json:"obsWebSocketVersion,omitempty"`
-	LastError           string `json:"lastError,omitempty"`
+	Enabled                 bool   `json:"enabled"`
+	RecordingDir            string `json:"recordingDir"`
+	MetadataPath            string `json:"metadataPath"`
+	TotalRecordings         int    `json:"totalRecordings"`
+	TotalSizeBytes          int64  `json:"totalSizeBytes"`
+	StorageLimitBytes       int64  `json:"storageLimitBytes"`
+	MinFreeSpaceBytes       int64  `json:"minFreeSpaceBytes"`
+	FreeSpaceBytes          int64  `json:"freeSpaceBytes"`
+	ConnectionStatus        string `json:"connectionStatus"`
+	ReplayBufferStatus      string `json:"replayBufferStatus"`
+	LastConnectionStatus    string `json:"lastConnectionStatus,omitempty"`
+	LastConnectionCheckedAt string `json:"lastConnectionCheckedAt,omitempty"`
+	LastReplayBufferStatus  string `json:"lastReplayBufferStatus,omitempty"`
+	OBSVersion              string `json:"obsVersion,omitempty"`
+	OBSWebSocketVersion     string `json:"obsWebSocketVersion,omitempty"`
+	LastError               string `json:"lastError,omitempty"`
 }
 
 type RecordingCleanupItem struct {

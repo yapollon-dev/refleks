@@ -154,6 +154,9 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 	if r.MinFreeSpaceGB <= 0 {
 		r.MinFreeSpaceGB = defaults.MinFreeSpaceGB
 	}
+	if strings.TrimSpace(r.OBSPassword) != "" || strings.TrimSpace(r.OBSPasswordProtected) != "" {
+		r.OBSPasswordSet = true
+	}
 	return r
 }
 
@@ -171,6 +174,8 @@ func recordingSettingsAbsent(r models.RecordingSettings) bool {
 		strings.TrimSpace(r.OBSHost) == "" &&
 		r.OBSPort == 0 &&
 		strings.TrimSpace(r.OBSPassword) == "" &&
+		strings.TrimSpace(r.OBSPasswordProtected) == "" &&
+		!r.OBSPasswordSet &&
 		!r.AutoConnect &&
 		!r.AutoStartReplayBuffer &&
 		strings.TrimSpace(string(r.SavePolicy)) == "" &&

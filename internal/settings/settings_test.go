@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"refleks/internal/constants"
@@ -96,5 +98,47 @@ func TestSanitizeRecordingSettingsDefaultsUnknownPolicy(t *testing.T) {
 
 	if got.SavePolicy != models.RecordingPolicyEveryRun {
 		t.Fatalf("save policy = %q, want every_run", got.SavePolicy)
+	}
+}
+
+func TestSettingsServiceProtectsRecordingPasswordOnDisk(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	service := NewService()
+	settings := service.Get()
+	settings.Recording.OBSPassword = "super-secret"
+	settings.Recording.OBSPasswordSet = true
+	if err := service.Update(settings); err != nil {
+		t.Fatalf("update settings with password: %v", err)
+	}
+
+	path, err := Path()
+	if err != nil {
+		t.Fatalf("settings path: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read settings: %v", err)
+	}
+	if strings.Contains(string(data), "super-secret") {
+		t.Fatalf("settings file should not contain plaintext OBS password: %s", data)
+	}
+	if !strings.Contains(string(data), "obsPasswordProtected") {
+		t.Fatalf("settings file should contain protected OBS password: %s", data)
+	}
+
+	frontend := service.GetForFrontend()
+	if frontend.Recording.OBSPassword != "" || !frontend.Recording.OBSPasswordSet {
+		t.Fatalf("frontend settings should hide password but preserve set flag: %#v", frontend.Recording)
+	}
+
+	reloaded := NewService()
+	if err := reloaded.Load(); err != nil {
+		t.Fatalf("reload settings: %v", err)
+	}
+	if got := reloaded.Get().Recording.OBSPassword; got != "super-secret" {
+		t.Fatalf("reloaded password = %q, want original", got)
 	}
 }

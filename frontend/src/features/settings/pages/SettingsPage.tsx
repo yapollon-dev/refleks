@@ -23,6 +23,7 @@ import {
   setAutostart,
   setFont,
   setTheme,
+  startRecordingReplayBuffer,
   testRecordingConnection,
   updateSettings,
   type Font,
@@ -66,6 +67,12 @@ function formatScenarioList(value?: string[]): string {
   return Array.isArray(value) ? value.join(', ') : ''
 }
 
+function formatCheckTime(value?: string): string {
+  if (!value) return ''
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleTimeString() : ''
+}
+
 export function SettingsPage() {
   const setSessionGap = useStore(s => s.setSessionGap)
   const setSessionNotes = useStore(s => s.setSessionNotes)
@@ -88,6 +95,7 @@ export function SettingsPage() {
   const [welcomePresentation, setWelcomePresentation] = useState<WelcomePresentation | null>(null)
   const [recordingStatus, setRecordingStatus] = useState<RecordingRuntimeStatus | null>(null)
   const [testingRecordingConnection, setTestingRecordingConnection] = useState(false)
+  const [startingReplayBuffer, setStartingReplayBuffer] = useState(false)
 
   useEffect(() => {
     getSettings().then(setSettings).catch(() => { })
@@ -154,6 +162,38 @@ export function SettingsPage() {
     })
   }
 
+  const updateRecordingPassword = (value: string) => {
+    setSettings(prev => {
+      if (!prev) return null
+      const next = {
+        ...prev,
+        recording: {
+          ...prev.recording,
+          obsPassword: value || undefined,
+          obsPasswordSet: value.trim() ? true : prev.recording.obsPasswordSet,
+        },
+      }
+      setHasUnsavedChanges(true)
+      return next
+    })
+  }
+
+  const clearRecordingPassword = () => {
+    setSettings(prev => {
+      if (!prev) return null
+      const next = {
+        ...prev,
+        recording: {
+          ...prev.recording,
+          obsPassword: undefined,
+          obsPasswordSet: false,
+        },
+      }
+      setHasUnsavedChanges(true)
+      return next
+    })
+  }
+
   const handleSelectRecordingDirectory = async () => {
     try {
       const dir = await selectRecordingDirectory()
@@ -185,10 +225,40 @@ export function SettingsPage() {
         freeSpaceBytes: prev?.freeSpaceBytes || 0,
         connectionStatus: 'error',
         replayBufferStatus: 'unknown',
+        lastConnectionStatus: 'error',
+        lastReplayBufferStatus: 'unknown',
         lastError: (e as Error)?.message || 'Failed to test OBS connection',
       }))
     } finally {
       setTestingRecordingConnection(false)
+    }
+  }
+
+  const handleStartReplayBuffer = async () => {
+    if (!settings) return
+    setStartingReplayBuffer(true)
+    try {
+      await queueSettingsSave(settings)
+      const next = await startRecordingReplayBuffer()
+      setRecordingStatus(next)
+    } catch (e) {
+      setRecordingStatus(prev => ({
+        enabled: settings.recording.enabled,
+        recordingDir: settings.recording.recordingDir,
+        metadataPath: prev?.metadataPath || '',
+        totalRecordings: prev?.totalRecordings || 0,
+        totalSizeBytes: prev?.totalSizeBytes || 0,
+        storageLimitBytes: prev?.storageLimitBytes || 0,
+        minFreeSpaceBytes: prev?.minFreeSpaceBytes || 0,
+        freeSpaceBytes: prev?.freeSpaceBytes || 0,
+        connectionStatus: 'not_connected',
+        replayBufferStatus: 'unknown',
+        lastConnectionStatus: 'error',
+        lastReplayBufferStatus: 'unknown',
+        lastError: (e as Error)?.message || 'Failed to start OBS replay buffer',
+      }))
+    } finally {
+      setStartingReplayBuffer(false)
     }
   }
 
@@ -313,6 +383,9 @@ export function SettingsPage() {
   }
 
   const recording = settings.recording
+  const recordingConnectionLabel = recordingStatus?.lastConnectionStatus || recordingStatus?.connectionStatus || 'not checked'
+  const recordingReplayLabel = recordingStatus?.lastReplayBufferStatus || recordingStatus?.replayBufferStatus || 'not checked'
+  const recordingCheckTime = formatCheckTime(recordingStatus?.lastConnectionCheckedAt)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
@@ -454,15 +527,22 @@ export function SettingsPage() {
                   </SettingsField>
                 </div>
 
-                <SettingsField label="OBS Password" description="Stored locally in settings and masked in the UI.">
-                  <Input
-                    type="password"
-                    value={recording.obsPassword || ''}
-                    onChange={e => updateRecordingField('obsPassword', e.target.value || undefined)}
-                    onKeyDown={handleInputKeyDown}
-                    className="w-full max-w-sm"
-                    placeholder="Optional"
-                  />
+                <SettingsField label="OBS Password" description="Stored locally with Windows user protection and masked in the UI.">
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      type="password"
+                      value={recording.obsPassword || ''}
+                      onChange={e => updateRecordingPassword(e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      className="w-full max-w-sm"
+                      placeholder={recording.obsPasswordSet ? 'Saved password - enter a new one to replace' : 'Optional'}
+                    />
+                    {recording.obsPasswordSet && (
+                      <Button type="button" variant="outline" size="sm" onClick={clearRecordingPassword}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
                 </SettingsField>
 
                 <div className="rounded-lg bg-surface-subtle px-3 py-3">
@@ -470,12 +550,18 @@ export function SettingsPage() {
                     <Button type="button" variant="outline" size="sm" onClick={() => void handleTestRecordingConnection()} disabled={testingRecordingConnection}>
                       {testingRecordingConnection ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS Connection'}
                     </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleStartReplayBuffer()} disabled={startingReplayBuffer}>
+                      {startingReplayBuffer ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Starting...</> : 'Start Replay Buffer'}
+                    </Button>
                     <span className="text-xs text-surface-muted-foreground">
-                      Connection: <span className="font-medium text-foreground">{recordingStatus?.connectionStatus || 'not checked'}</span>
+                      Last OBS check: <span className="font-medium text-foreground">{recordingConnectionLabel}</span>
                     </span>
                     <span className="text-xs text-surface-muted-foreground">
-                      Replay buffer: <span className="font-medium text-foreground">{recordingStatus?.replayBufferStatus || 'not checked'}</span>
+                      Replay buffer: <span className="font-medium text-foreground">{recordingReplayLabel}</span>
                     </span>
+                    {recordingCheckTime && (
+                      <span className="text-xs text-surface-muted-foreground">Checked {recordingCheckTime}</span>
+                    )}
                   </div>
                   {(recordingStatus?.obsVersion || recordingStatus?.obsWebSocketVersion) && (
                     <p className="mt-2 text-xs text-surface-muted-foreground">

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"refleks/internal/models"
@@ -72,6 +73,41 @@ func (s *MetadataStore) Upsert(record models.RecordingRecord) error {
 		records = append(records, record)
 	}
 	return s.saveLocked(records)
+}
+
+func (s *MetadataStore) CompactLegacySkipped() error {
+	if s == nil {
+		return errors.New("recording metadata store is not initialized")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+
+	compacted := records[:0]
+	changed := false
+	for _, record := range records {
+		if isLegacySkippedWithoutVideo(record) {
+			changed = true
+			continue
+		}
+		compacted = append(compacted, record)
+	}
+	if !changed {
+		return nil
+	}
+	return s.saveLocked(compacted)
+}
+
+func isLegacySkippedWithoutVideo(record models.RecordingRecord) bool {
+	return record.Status == models.RecordingStatusSkipped &&
+		strings.TrimSpace(record.VideoPath) == "" &&
+		strings.TrimSpace(record.OBSSourcePath) == "" &&
+		record.SizeBytes == 0
 }
 
 func (s *MetadataStore) loadLocked() ([]models.RecordingRecord, error) {

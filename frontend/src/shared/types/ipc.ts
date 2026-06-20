@@ -193,6 +193,8 @@ export interface RecordingSettings {
   obsHost: string
   obsPort: number
   obsPassword?: string
+  obsPasswordProtected?: string
+  obsPasswordSet?: boolean
   autoConnect: boolean
   autoStartReplayBuffer: boolean
   savePolicy: RecordingPolicy
@@ -242,6 +244,9 @@ export interface RecordingRuntimeStatus {
   freeSpaceBytes: number
   connectionStatus: string
   replayBufferStatus: string
+  lastConnectionStatus?: string
+  lastConnectionCheckedAt?: string
+  lastReplayBufferStatus?: string
   obsVersion?: string
   obsWebSocketVersion?: string
   lastError?: string

@@ -50,7 +50,13 @@ func (s *Service) Load() error {
 		return err
 	}
 
-	s.current = Sanitize(loaded)
+	sanitized := Sanitize(loaded)
+	var changed bool
+	sanitized.Recording, changed = recordingPasswordAfterLoad(sanitized.Recording)
+	s.current = sanitized
+	if changed {
+		return s.saveLocked()
+	}
 	return nil
 }
 
@@ -61,10 +67,18 @@ func (s *Service) Get() models.Settings {
 	return s.current
 }
 
+// GetForFrontend returns settings without exposing the decrypted OBS password.
+func (s *Service) GetForFrontend() models.Settings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return settingsForFrontend(s.current)
+}
+
 // Update updates the settings and persists them to disk.
 func (s *Service) Update(newSettings models.Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	newSettings.Recording = mergeRecordingPassword(newSettings.Recording, s.current.Recording)
 	s.current = Sanitize(newSettings)
 	return s.saveLocked()
 }
@@ -72,6 +86,11 @@ func (s *Service) Update(newSettings models.Settings) error {
 // saveLocked writes the current settings to disk. Caller must hold the lock.
 func (s *Service) saveLocked() error {
 	dir, err := EnsureConfigDir()
+	if err != nil {
+		return err
+	}
+
+	persisted, err := settingsForDisk(s.current)
 	if err != nil {
 		return err
 	}
@@ -85,7 +104,7 @@ func (s *Service) saveLocked() error {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(s.current)
+	return enc.Encode(persisted)
 }
 
 // Helper to get favorite benchmarks (logic moved from app.go/settings.go)

@@ -19,9 +19,11 @@ import {
   runRecordingCleanup,
   saveCurrentReplay,
   setRecordingProtected,
+  startRecordingReplayBuffer,
   testRecordingConnection,
 } from '@/shared/lib'
 import type { RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RecordingStatusValue, RunRecord } from '@/shared/types'
+import { EventsOn } from '@wails/runtime'
 import { ExternalLink, FolderOpen, HardDrive, Lock, LockOpen, RefreshCw, Save, Search, Trash2, Video } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -73,6 +75,12 @@ function sortTimestamp(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function checkedAtLabel(value?: string): string {
+  if (!value) return ''
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleTimeString() : ''
+}
+
 export function RecordingsPage() {
   const [status, setStatus] = useState<RecordingRuntimeStatus | null>(null)
   const [recordings, setRecordings] = useState<RecordingRecord[]>([])
@@ -81,6 +89,7 @@ export function RecordingsPage() {
   const [cleanupPreview, setCleanupPreview] = useState<RecordingCleanupPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
+  const [startingReplayBuffer, setStartingReplayBuffer] = useState(false)
   const [saving, setSaving] = useState(false)
   const [refreshingFiles, setRefreshingFiles] = useState(false)
   const [previewingCleanup, setPreviewingCleanup] = useState(false)
@@ -113,6 +122,19 @@ export function RecordingsPage() {
 
   useEffect(() => {
     void load()
+  }, [])
+
+  useEffect(() => {
+    const offRecordings = EventsOn('recordings:changed', () => {
+      void load()
+    })
+    const offStatus = EventsOn('recording:status:changed', () => {
+      void load()
+    })
+    return () => {
+      offRecordings()
+      offStatus()
+    }
   }, [])
 
   const visibleRecordings = useMemo(() => {
@@ -152,6 +174,18 @@ export function RecordingsPage() {
       setError((e as Error)?.message || 'Failed to test OBS connection')
     } finally {
       setTesting(false)
+    }
+  }
+
+  const handleStartReplayBuffer = async () => {
+    setStartingReplayBuffer(true)
+    setError('')
+    try {
+      setStatus(await startRecordingReplayBuffer())
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to start OBS replay buffer')
+    } finally {
+      setStartingReplayBuffer(false)
     }
   }
 
@@ -283,6 +317,9 @@ export function RecordingsPage() {
   const storageLimit = status?.storageLimitBytes || cleanupPreview?.storageLimitBytes || 0
   const freeSpace = status?.freeSpaceBytes || cleanupPreview?.freeSpaceBytes || 0
   const minFreeSpace = status?.minFreeSpaceBytes || cleanupPreview?.minFreeSpaceBytes || 0
+  const obsStatusLabel = status?.lastConnectionStatus || status?.connectionStatus || 'not checked'
+  const replayStatusLabel = status?.lastReplayBufferStatus || status?.replayBufferStatus || 'not checked'
+  const obsCheckedAt = checkedAtLabel(status?.lastConnectionCheckedAt)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
@@ -316,6 +353,9 @@ export function RecordingsPage() {
             <Button onClick={() => void handleTestConnection()} disabled={testing} variant="outline" size="sm">
               {testing ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS'}
             </Button>
+            <Button onClick={() => void handleStartReplayBuffer()} disabled={startingReplayBuffer} variant="outline" size="sm">
+              {startingReplayBuffer ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Starting...</> : 'Start Buffer'}
+            </Button>
             <Button onClick={() => void load()} disabled={loading} variant="outline" size="sm">
               {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Refresh'}
             </Button>
@@ -332,12 +372,13 @@ export function RecordingsPage() {
             </div>
           </div>
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">OBS</div>
-            <div className="mt-2 text-base font-medium text-foreground">{status?.connectionStatus || 'not checked'}</div>
+            <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Last OBS check</div>
+            <div className="mt-2 text-base font-medium text-foreground">{obsStatusLabel}</div>
+            {obsCheckedAt && <div className="mt-0.5 text-[11px] text-surface-muted-foreground">{obsCheckedAt}</div>}
           </div>
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Replay buffer</div>
-            <div className="mt-2 text-base font-medium text-foreground">{status?.replayBufferStatus || 'not checked'}</div>
+            <div className="mt-2 text-base font-medium text-foreground">{replayStatusLabel}</div>
           </div>
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Saved clips</div>

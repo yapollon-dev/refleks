@@ -55,3 +55,36 @@ func TestMetadataStoreMissingFileReturnsEmptyList(t *testing.T) {
 		t.Fatalf("record count = %d, want 0", len(records))
 	}
 }
+
+func TestMetadataStoreCompactsLegacySkippedRowsWithoutVideo(t *testing.T) {
+	store := NewMetadataStore(filepath.Join(t.TempDir(), "recordings.json"))
+	if err := store.Save([]models.RecordingRecord{
+		{ID: "skip-empty", Status: models.RecordingStatusSkipped},
+		{ID: "skip-with-source", Status: models.RecordingStatusSkipped, OBSSourcePath: "C:/obs/replay.mp4"},
+		{ID: "failed", Status: models.RecordingStatusFailed},
+		{ID: "saved", Status: models.RecordingStatusSaved, VideoPath: "C:/clips/replay.mp4", SizeBytes: 42},
+	}); err != nil {
+		t.Fatalf("save fixtures: %v", err)
+	}
+
+	if err := store.CompactLegacySkipped(); err != nil {
+		t.Fatalf("compact legacy skipped: %v", err)
+	}
+
+	records, err := store.List()
+	if err != nil {
+		t.Fatalf("list failed: %v", err)
+	}
+	gotIDs := make(map[string]bool, len(records))
+	for _, record := range records {
+		gotIDs[record.ID] = true
+	}
+	if gotIDs["skip-empty"] {
+		t.Fatalf("empty legacy skipped row should be removed: %#v", records)
+	}
+	for _, id := range []string{"skip-with-source", "failed", "saved"} {
+		if !gotIDs[id] {
+			t.Fatalf("expected row %q to be kept, got %#v", id, records)
+		}
+	}
+}

@@ -76,6 +76,8 @@ export function SetRecordingProtected(arg1:string,arg2:boolean):Promise<models.R
 
 export function ShowWindow():Promise<void>;
 
+export function StartRecordingReplayBuffer():Promise<models.RecordingRuntimeStatus>;
+
 export function StartWatcher(arg1:string):Promise<void>;
 
 export function StopWatcher():Promise<void>;

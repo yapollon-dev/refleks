@@ -70,7 +70,7 @@ func TestNewRecordingRecordLinksRunAndReason(t *testing.T) {
 	}
 }
 
-func TestTestConnectionStartsReplayBufferWhenAutoStartEnabled(t *testing.T) {
+func TestTestConnectionDoesNotStartReplayBufferWhenAutoStartEnabled(t *testing.T) {
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayActive = false
 	})
@@ -81,11 +81,33 @@ func TestTestConnectionStartsReplayBufferWhenAutoStartEnabled(t *testing.T) {
 	service := newStorageTestService(t, cfg)
 
 	status := service.TestConnection(context.Background())
-	if status.ConnectionStatus != "connected" || status.ReplayBufferStatus != "active" {
-		t.Fatalf("test connection should start replay buffer, got %#v", status)
+	if status.ConnectionStatus != "not_connected" || status.LastConnectionStatus != "connected" || status.ReplayBufferStatus != "inactive" {
+		t.Fatalf("test connection should report read-only status, got %#v", status)
 	}
 	if status.LastError != "" {
 		t.Fatalf("unexpected status error: %#v", status)
+	}
+	if fake.startReplayRequests != 0 {
+		t.Fatalf("test connection should not start replay buffer, got %d start requests", fake.startReplayRequests)
+	}
+}
+
+func TestStartReplayBufferStartsInactiveBuffer(t *testing.T) {
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = false
+	})
+	cfg := fake.settings(t, "")
+	service := newStorageTestService(t, cfg)
+
+	status := service.StartReplayBuffer(context.Background())
+	if status.ConnectionStatus != "not_connected" || status.LastConnectionStatus != "connected" || status.ReplayBufferStatus != "active" {
+		t.Fatalf("start replay buffer status mismatch: %#v", status)
+	}
+	if status.LastError != "" {
+		t.Fatalf("unexpected status error: %#v", status)
+	}
+	if fake.startReplayRequests != 1 {
+		t.Fatalf("explicit start should call StartReplayBuffer once, got %d", fake.startReplayRequests)
 	}
 }
 
@@ -316,6 +338,42 @@ func TestHandleCompletedRunAutoConnectDisabledUpdatesFailedRecordInPlace(t *test
 	}
 	if len(records) != 1 || records[0].ID != first.ID {
 		t.Fatalf("duplicate auto failure should update one row, got %#v", records)
+	}
+}
+
+func TestHandleCompletedRunPolicySkipDoesNotPersistMetadata(t *testing.T) {
+	cfg := models.RecordingSettings{
+		Enabled:      true,
+		AutoConnect:  true,
+		SavePolicy:   models.RecordingPolicyNewPB,
+		RecordingDir: t.TempDir(),
+	}
+	service := newStorageTestService(t, cfg)
+	run := recordingRunFixture()
+	higher := run
+	higher.FileName = "Smoothbot - Challenge - 2026.06.19-09.00.00"
+	higher.Stats = map[string]any{
+		"Scenario":    "Smoothbot",
+		"Score":       999.0,
+		"Date Played": "2026-06-19T09:00:00Z",
+	}
+	if _, err := service.runStore.Save(runs.RunRecord{FileName: higher.FileName, Stats: higher.Stats}); err != nil {
+		t.Fatalf("save higher run fixture: %v", err)
+	}
+
+	record, err := service.HandleCompletedRun(context.Background(), run)
+	if err != nil {
+		t.Fatalf("policy skip should not fail: %v", err)
+	}
+	if record.ID != "" {
+		t.Fatalf("policy skip should not return persisted metadata: %#v", record)
+	}
+	records, err := service.metadata.List()
+	if err != nil {
+		t.Fatalf("list metadata: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("policy skip should not persist metadata rows, got %#v", records)
 	}
 }
 
