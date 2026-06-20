@@ -133,7 +133,14 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 	if r.OBSPort <= 0 {
 		r.OBSPort = defaults.OBSPort
 	}
-	if strings.TrimSpace(string(r.SavePolicy)) == "" {
+	switch {
+	case strings.TrimSpace(string(r.SavePolicy)) == "":
+		r.SavePolicy = defaults.SavePolicy
+	case string(r.SavePolicy) == "manual_only":
+		// Legacy manual-only meant "no automatic saves"; migrate it without enabling auto recording.
+		r.Enabled = false
+		r.SavePolicy = defaults.SavePolicy
+	case !validRecordingPolicy(r.SavePolicy):
 		r.SavePolicy = defaults.SavePolicy
 	}
 	if strings.TrimSpace(r.RecordingDir) == "" {
@@ -148,6 +155,15 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 		r.MinFreeSpaceGB = defaults.MinFreeSpaceGB
 	}
 	return r
+}
+
+func validRecordingPolicy(policy models.RecordingPolicy) bool {
+	switch policy {
+	case models.RecordingPolicyEveryRun, models.RecordingPolicyNewPB, models.RecordingPolicyPBTies, models.RecordingPolicyTopThree:
+		return true
+	default:
+		return false
+	}
 }
 
 func recordingSettingsAbsent(r models.RecordingSettings) bool {

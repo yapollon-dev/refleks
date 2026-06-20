@@ -53,7 +53,6 @@ const recordingPolicyOptions = [
   { label: 'New PBs only', value: 'new_pb' },
   { label: 'PBs and ties', value: 'pb_and_ties' },
   { label: 'Local top three', value: 'top_three' },
-  { label: 'Manual only', value: 'manual_only' },
 ]
 
 function parseScenarioList(value: string): string[] {

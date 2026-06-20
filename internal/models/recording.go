@@ -5,20 +5,18 @@ type RecordingKeepReason string
 type RecordingStatus string
 
 const (
-	RecordingPolicyEveryRun   RecordingPolicy = "every_run"
-	RecordingPolicyNewPB      RecordingPolicy = "new_pb"
-	RecordingPolicyPBTies     RecordingPolicy = "pb_and_ties"
-	RecordingPolicyTopThree   RecordingPolicy = "top_three"
-	RecordingPolicyManualOnly RecordingPolicy = "manual_only"
+	RecordingPolicyEveryRun RecordingPolicy = "every_run"
+	RecordingPolicyNewPB    RecordingPolicy = "new_pb"
+	RecordingPolicyPBTies   RecordingPolicy = "pb_and_ties"
+	RecordingPolicyTopThree RecordingPolicy = "top_three"
 
-	RecordingKeepReasonEveryRun   RecordingKeepReason = "every_run"
-	RecordingKeepReasonManual     RecordingKeepReason = "manual_save"
-	RecordingKeepReasonNewPB      RecordingKeepReason = "new_pb"
-	RecordingKeepReasonPBTie      RecordingKeepReason = "pb_tie"
-	RecordingKeepReasonTopThree   RecordingKeepReason = "top_three"
-	RecordingKeepReasonAlways     RecordingKeepReason = "always_save_scenario"
-	RecordingKeepReasonNever      RecordingKeepReason = "never_save_scenario"
-	RecordingKeepReasonManualOnly RecordingKeepReason = "manual_only"
+	RecordingKeepReasonEveryRun RecordingKeepReason = "every_run"
+	RecordingKeepReasonManual   RecordingKeepReason = "manual_save"
+	RecordingKeepReasonNewPB    RecordingKeepReason = "new_pb"
+	RecordingKeepReasonPBTie    RecordingKeepReason = "pb_tie"
+	RecordingKeepReasonTopThree RecordingKeepReason = "top_three"
+	RecordingKeepReasonAlways   RecordingKeepReason = "always_save_scenario"
+	RecordingKeepReasonNever    RecordingKeepReason = "never_save_scenario"
 
 	RecordingStatusPending RecordingStatus = "pending"
 	RecordingStatusSaved   RecordingStatus = "saved"

@@ -25,8 +25,6 @@ func EvaluatePolicy(cfg models.RecordingSettings, current models.RunRecord, allR
 	}
 
 	switch cfg.SavePolicy {
-	case models.RecordingPolicyManualOnly:
-		return PolicyDecision{ShouldSave: false, Reason: models.RecordingKeepReasonManualOnly}
 	case models.RecordingPolicyNewPB:
 		if isNewPB(current, allRuns) {
 			return PolicyDecision{ShouldSave: true, Reason: models.RecordingKeepReasonNewPB, PBAtSave: true}

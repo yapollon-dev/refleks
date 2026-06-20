@@ -33,7 +33,7 @@ func TestEvaluatePolicyNeverOverridesAlways(t *testing.T) {
 func TestEvaluatePolicyAlwaysOverridesGlobalPolicy(t *testing.T) {
 	current := runFixture("current", "Smoothbot", "", 100)
 	cfg := models.RecordingSettings{
-		SavePolicy:          models.RecordingPolicyManualOnly,
+		SavePolicy:          models.RecordingPolicyTopThree,
 		AlwaysSaveScenarios: []string{"Smoothbot"},
 	}
 
@@ -86,13 +86,13 @@ func TestEvaluatePolicyTopThree(t *testing.T) {
 	}
 }
 
-func TestEvaluatePolicyManualOnlySkips(t *testing.T) {
+func TestEvaluatePolicyUnknownPolicyDefaultsToEveryRun(t *testing.T) {
 	current := runFixture("current", "Smoothbot", "", 100)
-	cfg := models.RecordingSettings{SavePolicy: models.RecordingPolicyManualOnly}
+	cfg := models.RecordingSettings{SavePolicy: models.RecordingPolicy("unknown")}
 
 	decision := EvaluatePolicy(cfg, current, []models.RunRecord{current})
-	if decision.ShouldSave || decision.Reason != models.RecordingKeepReasonManualOnly {
-		t.Fatalf("decision = %#v, want manual-only skip", decision)
+	if !decision.ShouldSave || decision.Reason != models.RecordingKeepReasonEveryRun {
+		t.Fatalf("decision = %#v, want every-run default", decision)
 	}
 }
 

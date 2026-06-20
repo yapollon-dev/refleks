@@ -55,7 +55,7 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 		OBSPort:               4456,
 		AutoConnect:           false,
 		AutoStartReplayBuffer: false,
-		SavePolicy:            models.RecordingPolicyManualOnly,
+		SavePolicy:            models.RecordingPolicyNewPB,
 		RecordingDir:          "C:/clips",
 		StorageLimitGB:        10,
 		MinFreeSpaceGB:        2,
@@ -66,5 +66,35 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 	}
 	if got.RecordingDir != filepath.Clean("C:/clips") {
 		t.Fatalf("recording dir = %q, want cleaned path", got.RecordingDir)
+	}
+}
+
+func TestSanitizeRecordingSettingsMigratesLegacyManualOnlyPolicy(t *testing.T) {
+	got := SanitizeRecordingSettings(models.RecordingSettings{
+		Enabled:      true,
+		OBSHost:      "localhost",
+		OBSPort:      4455,
+		SavePolicy:   models.RecordingPolicy("manual_only"),
+		RecordingDir: "C:/clips",
+	})
+
+	if got.Enabled {
+		t.Fatalf("legacy manual_only should disable auto recording")
+	}
+	if got.SavePolicy != models.RecordingPolicyEveryRun {
+		t.Fatalf("save policy = %q, want every_run", got.SavePolicy)
+	}
+}
+
+func TestSanitizeRecordingSettingsDefaultsUnknownPolicy(t *testing.T) {
+	got := SanitizeRecordingSettings(models.RecordingSettings{
+		OBSHost:      "localhost",
+		OBSPort:      4455,
+		SavePolicy:   models.RecordingPolicy("custom"),
+		RecordingDir: "C:/clips",
+	})
+
+	if got.SavePolicy != models.RecordingPolicyEveryRun {
+		t.Fatalf("save policy = %q, want every_run", got.SavePolicy)
 	}
 }
