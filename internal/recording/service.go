@@ -26,6 +26,8 @@ type Service struct {
 	lastStatus  models.RecordingRuntimeStatus
 }
 
+var errRecordingAlreadyExists = errors.New("recording already exists for this run")
+
 func NewService(settingsSvc *appsettings.Service, runStore *runs.Store) (*Service, error) {
 	path, err := MetadataPath()
 	if err != nil {
@@ -208,27 +210,27 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 	}
 	decision := EvaluatePolicy(cfg, rec, allRuns)
 	if !decision.ShouldSave {
-		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
-		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
-		record.Status = models.RecordingStatusSkipped
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		if err := s.metadata.Upsert(record); err != nil {
+		record, err := s.upsertAutoAttemptStatus(rec, decision.Reason, decision.PBAtSave, importedAt, models.RecordingStatusSkipped, "")
+		if err != nil {
 			return models.RecordingRecord{}, err
 		}
 		return record, nil
 	}
 	if !cfg.AutoConnect {
-		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
-		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
-		record.Status = models.RecordingStatusFailed
-		record.LastError = "automatic OBS connection is disabled"
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		if err := s.metadata.Upsert(record); err != nil {
+		record, err := s.upsertAutoAttemptStatus(rec, decision.Reason, decision.PBAtSave, importedAt, models.RecordingStatusFailed, "automatic OBS connection is disabled")
+		if err != nil {
 			return models.RecordingRecord{}, err
+		}
+		if record.Status != models.RecordingStatusFailed || strings.TrimSpace(record.LastError) == "" {
+			return record, nil
 		}
 		return record, errors.New(record.LastError)
 	}
-	return s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave, importedAt)
+	record, err := s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave, importedAt)
+	if errors.Is(err, errRecordingAlreadyExists) {
+		return record, nil
+	}
+	return record, err
 }
 
 func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) (models.RecordingRecord, error) {
@@ -247,20 +249,15 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 		return models.RecordingRecord{}, errors.New("recording folder is not configured")
 	}
 
-	rec = runs.EnsureRunID(rec)
-	if existing, ok, err := s.activeRecordingForRun(rec.RunID); err != nil {
-		return models.RecordingRecord{}, err
-	} else if ok {
-		return existing, fmt.Errorf("recording already exists for this run")
-	}
-
-	record := newRecordingRecord(rec, reason, pbAtSave)
-	if !importedAt.IsZero() {
-		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
+	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt)
+	if err != nil {
+		return record, err
 	}
 	if err := s.metadata.Upsert(record); err != nil {
 		return models.RecordingRecord{}, err
 	}
+
+	rec = runs.EnsureRunID(rec)
 
 	fail := func(err error) (models.RecordingRecord, error) {
 		record.Status = models.RecordingStatusFailed
@@ -329,6 +326,60 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 		}
 	}
 	return record, nil
+}
+
+func (s *Service) upsertAutoAttemptStatus(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time, status models.RecordingStatus, lastError string) (models.RecordingRecord, error) {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt)
+	if errors.Is(err, errRecordingAlreadyExists) {
+		return record, nil
+	}
+	if err != nil {
+		return models.RecordingRecord{}, err
+	}
+
+	record.Status = status
+	record.LastError = lastError
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.metadata.Upsert(record); err != nil {
+		return models.RecordingRecord{}, err
+	}
+	return record, nil
+}
+
+func (s *Service) prepareRecordingAttemptLocked(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) (models.RecordingRecord, error) {
+	rec = runs.EnsureRunID(rec)
+	if existing, ok, err := s.recordingForRun(rec.RunID); err != nil {
+		return models.RecordingRecord{}, err
+	} else if ok {
+		if existing.Status == models.RecordingStatusSaved || existing.Status == models.RecordingStatusPending {
+			return existing, errRecordingAlreadyExists
+		}
+		return resetRecordingAttempt(existing, rec, reason, pbAtSave, importedAt), nil
+	}
+
+	record := newRecordingRecord(rec, reason, pbAtSave)
+	if !importedAt.IsZero() {
+		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
+	}
+	return record, nil
+}
+
+// resetRecordingAttempt keeps the metadata identity for a retry while clearing stale save output.
+func resetRecordingAttempt(existing models.RecordingRecord, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) models.RecordingRecord {
+	record := newRecordingRecord(rec, reason, pbAtSave)
+	record.ID = existing.ID
+	record.CreatedAt = existing.CreatedAt
+	if strings.TrimSpace(record.CreatedAt) == "" {
+		record.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	record.Protected = existing.Protected
+	if !importedAt.IsZero() {
+		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
+	}
+	return record
 }
 
 type replayBufferReadiness struct {
@@ -427,6 +478,32 @@ func describeOBSConnectionError(err error) error {
 		return fmt.Errorf("OBS authentication failed: %w", err)
 	}
 	return fmt.Errorf("OBS connection failed or was lost: %w", err)
+}
+
+func (s *Service) recordingForRun(runID string) (models.RecordingRecord, bool, error) {
+	records, err := s.List()
+	if err != nil {
+		return models.RecordingRecord{}, false, err
+	}
+
+	var retryable models.RecordingRecord
+	foundRetryable := false
+	for _, record := range records {
+		if record.RunID != runID {
+			continue
+		}
+		if record.Status == models.RecordingStatusSaved || record.Status == models.RecordingStatusPending {
+			return record, true, nil
+		}
+		if !foundRetryable {
+			retryable = record
+			foundRetryable = true
+		}
+	}
+	if foundRetryable {
+		return retryable, true, nil
+	}
+	return models.RecordingRecord{}, false, nil
 }
 
 func (s *Service) activeRecordingForRun(runID string) (models.RecordingRecord, bool, error) {

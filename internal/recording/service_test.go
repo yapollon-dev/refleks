@@ -156,6 +156,83 @@ func TestSaveRunReplayFailsWhenReplayBufferWasInactiveAtSaveTime(t *testing.T) {
 	}
 }
 
+func TestSaveRunReplayRetriesFailedRecordInPlace(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "retry replay.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = true
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = true
+	cfg.AutoStartReplayBuffer = true
+	cfg.RecordingDir = t.TempDir()
+	service := newStorageTestService(t, cfg)
+	run := recordingRunFixture()
+	existing := newRecordingRecord(run, models.RecordingKeepReasonEveryRun, false)
+	existing.ID = "rec_existing"
+	existing.Status = models.RecordingStatusFailed
+	existing.LastError = "previous failure"
+	existing.Protected = true
+	if err := service.metadata.Save([]models.RecordingRecord{existing}); err != nil {
+		t.Fatalf("save existing failed recording: %v", err)
+	}
+
+	record, err := service.saveRunReplay(context.Background(), run, models.RecordingKeepReasonEveryRun, false, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("retry save replay: %v", err)
+	}
+	if record.ID != existing.ID {
+		t.Fatalf("retry should reuse recording id %q, got %q", existing.ID, record.ID)
+	}
+	if !record.Protected {
+		t.Fatalf("retry should preserve protection flag")
+	}
+	if record.Status != models.RecordingStatusSaved || record.LastError != "" {
+		t.Fatalf("retry should save and clear previous error: %#v", record)
+	}
+	records, err := service.metadata.List()
+	if err != nil {
+		t.Fatalf("list metadata: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != existing.ID {
+		t.Fatalf("retry should update one metadata row, got %#v", records)
+	}
+}
+
+func TestHandleCompletedRunAutoConnectDisabledUpdatesFailedRecordInPlace(t *testing.T) {
+	cfg := models.RecordingSettings{
+		Enabled:      true,
+		AutoConnect:  false,
+		RecordingDir: t.TempDir(),
+	}
+	service := newStorageTestService(t, cfg)
+	run := recordingRunFixture()
+
+	first, err := service.HandleCompletedRun(context.Background(), run)
+	if err == nil {
+		t.Fatalf("first auto attempt should fail when auto connect is disabled")
+	}
+	if first.Status != models.RecordingStatusFailed {
+		t.Fatalf("first status = %q, want failed", first.Status)
+	}
+
+	second, err := service.HandleCompletedRun(context.Background(), run)
+	if err == nil {
+		t.Fatalf("second auto attempt should still report auto connect disabled")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("duplicate auto failure should reuse id %q, got %q", first.ID, second.ID)
+	}
+	records, err := service.metadata.List()
+	if err != nil {
+		t.Fatalf("list metadata: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != first.ID {
+		t.Fatalf("duplicate auto failure should update one row, got %#v", records)
+	}
+}
+
 func TestEnsureReplayBufferStartedNoopsWhenRecordingDisabled(t *testing.T) {
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayActive = false

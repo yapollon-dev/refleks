@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"refleks/internal/models"
+	"refleks/internal/runs"
 	appsettings "refleks/internal/settings"
 )
 
@@ -36,6 +37,7 @@ func newStorageTestService(t *testing.T, cfg models.RecordingSettings) *Service 
 	return &Service{
 		metadata:    NewMetadataStore(filepath.Join(t.TempDir(), "recordings.json")),
 		settingsSvc: settingsSvc,
+		runStore:    runs.NewStore(settingsSvc),
 	}
 }
 
