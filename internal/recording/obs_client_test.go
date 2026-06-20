@@ -34,6 +34,8 @@ type fakeOBSServer struct {
 	noReplayEvent            bool
 	replayEventAfterResponse bool
 	writeReplayOnSave        bool
+	saveReplayRequests       int
+	startReplayRequests      int
 }
 
 func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServer {
@@ -120,8 +122,10 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 						"outputActive": mustJSON(fake.replayActive),
 					}
 				case "StartReplayBuffer":
+					fake.startReplayRequests++
 					fake.replayActive = true
 				case "SaveReplayBuffer":
+					fake.saveReplayRequests++
 					if fake.replayPath != "" && fake.writeReplayOnSave {
 						if err := os.WriteFile(fake.replayPath, []byte("clip"), 0o644); err != nil {
 							return
@@ -282,8 +286,11 @@ func TestOBSClientSaveReplayBufferUsesSavedEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveReplayBuffer failed: %v", err)
 	}
-	if got != replayPath {
-		t.Fatalf("saved path = %q, want %q", got, replayPath)
+	if got.Path != replayPath {
+		t.Fatalf("saved path = %q, want %q", got.Path, replayPath)
+	}
+	if got.RequestedAt.IsZero() || got.ConfirmedAt.IsZero() || got.FileModTime.IsZero() {
+		t.Fatalf("save result should include timing metadata: %#v", got)
 	}
 }
 
@@ -304,8 +311,8 @@ func TestOBSClientSaveReplayBufferUsesSavedEventAfterResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveReplayBuffer failed: %v", err)
 	}
-	if got != replayPath {
-		t.Fatalf("saved path = %q, want %q", got, replayPath)
+	if got.Path != replayPath {
+		t.Fatalf("saved path = %q, want %q", got.Path, replayPath)
 	}
 }
 
@@ -329,7 +336,7 @@ func TestOBSClientSaveReplayBufferDoesNotFallBackToLastReplay(t *testing.T) {
 	defer client.Close()
 
 	if got, err := client.SaveReplayBuffer(context.Background()); err == nil {
-		t.Fatalf("SaveReplayBuffer should not fall back to last replay, got %q", got)
+		t.Fatalf("SaveReplayBuffer should not fall back to last replay, got %#v", got)
 	}
 }
 

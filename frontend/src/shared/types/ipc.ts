@@ -214,6 +214,12 @@ export interface RecordingRecord {
   playedAt?: string
   keepReason: RecordingKeepReason
   obsSourcePath?: string
+  runImportedAt?: string
+  captureRequestedAt?: string
+  captureConfirmedAt?: string
+  captureDelayMs?: number
+  replayBufferStatusAtSave?: string
+  obsReplayFileModTime?: string
   videoPath: string
   sizeBytes: number
   status: RecordingStatusValue

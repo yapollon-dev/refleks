@@ -44,23 +44,29 @@ type RecordingSettings struct {
 }
 
 type RecordingRecord struct {
-	ID            string              `json:"id"`
-	RunID         string              `json:"runId"`
-	RunFileName   string              `json:"runFileName"`
-	RunFilePath   string              `json:"runFilePath"`
-	Scenario      string              `json:"scenario"`
-	Score         float64             `json:"score"`
-	PlayedAt      string              `json:"playedAt,omitempty"`
-	KeepReason    RecordingKeepReason `json:"keepReason"`
-	OBSSourcePath string              `json:"obsSourcePath,omitempty"`
-	VideoPath     string              `json:"videoPath"`
-	SizeBytes     int64               `json:"sizeBytes"`
-	Status        RecordingStatus     `json:"status"`
-	Protected     bool                `json:"protected"`
-	PBAtSave      bool                `json:"pbAtSave"`
-	CreatedAt     string              `json:"createdAt"`
-	UpdatedAt     string              `json:"updatedAt"`
-	LastError     string              `json:"lastError,omitempty"`
+	ID                       string              `json:"id"`
+	RunID                    string              `json:"runId"`
+	RunFileName              string              `json:"runFileName"`
+	RunFilePath              string              `json:"runFilePath"`
+	Scenario                 string              `json:"scenario"`
+	Score                    float64             `json:"score"`
+	PlayedAt                 string              `json:"playedAt,omitempty"`
+	KeepReason               RecordingKeepReason `json:"keepReason"`
+	OBSSourcePath            string              `json:"obsSourcePath,omitempty"`
+	RunImportedAt            string              `json:"runImportedAt,omitempty"`
+	CaptureRequestedAt       string              `json:"captureRequestedAt,omitempty"`
+	CaptureConfirmedAt       string              `json:"captureConfirmedAt,omitempty"`
+	CaptureDelayMs           int64               `json:"captureDelayMs,omitempty"`
+	ReplayBufferStatusAtSave string              `json:"replayBufferStatusAtSave,omitempty"`
+	OBSReplayFileModTime     string              `json:"obsReplayFileModTime,omitempty"`
+	VideoPath                string              `json:"videoPath"`
+	SizeBytes                int64               `json:"sizeBytes"`
+	Status                   RecordingStatus     `json:"status"`
+	Protected                bool                `json:"protected"`
+	PBAtSave                 bool                `json:"pbAtSave"`
+	CreatedAt                string              `json:"createdAt"`
+	UpdatedAt                string              `json:"updatedAt"`
+	LastError                string              `json:"lastError,omitempty"`
 }
 
 type RecordingRuntimeStatus struct {

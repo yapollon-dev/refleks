@@ -155,7 +155,7 @@ func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.Recordin
 	defer client.Close()
 
 	status.ConnectionStatus = "connected"
-	if err := s.ensureReplayBuffer(ctx, client, cfg); err != nil {
+	if _, err := s.ensureReplayBuffer(ctx, client, cfg); err != nil {
 		status.ReplayBufferStatus = "inactive"
 		status.LastError = err.Error()
 		s.cacheStatus(status)
@@ -182,13 +182,14 @@ func (s *Service) SaveLatestRunReplay(ctx context.Context) (models.RecordingReco
 }
 
 func (s *Service) SaveRunReplay(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
-	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false)
+	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false, time.Time{})
 }
 
 func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
 	if s == nil || s.settingsSvc == nil || s.runStore == nil {
 		return models.RecordingRecord{}, errors.New("recording service is not initialized")
 	}
+	importedAt := time.Now().UTC()
 
 	cfg := s.settingsSvc.Get().Recording
 	if !cfg.Enabled {
@@ -208,6 +209,7 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 	decision := EvaluatePolicy(cfg, rec, allRuns)
 	if !decision.ShouldSave {
 		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
+		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
 		record.Status = models.RecordingStatusSkipped
 		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		if err := s.metadata.Upsert(record); err != nil {
@@ -217,6 +219,7 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 	}
 	if !cfg.AutoConnect {
 		record := newRecordingRecord(rec, decision.Reason, decision.PBAtSave)
+		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
 		record.Status = models.RecordingStatusFailed
 		record.LastError = "automatic OBS connection is disabled"
 		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -225,10 +228,10 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 		}
 		return record, errors.New(record.LastError)
 	}
-	return s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave)
+	return s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave, importedAt)
 }
 
-func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool) (models.RecordingRecord, error) {
+func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) (models.RecordingRecord, error) {
 	if s == nil || s.settingsSvc == nil || s.metadata == nil {
 		return models.RecordingRecord{}, errors.New("recording service is not initialized")
 	}
@@ -252,6 +255,9 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	}
 
 	record := newRecordingRecord(rec, reason, pbAtSave)
+	if !importedAt.IsZero() {
+		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
+	}
 	if err := s.metadata.Upsert(record); err != nil {
 		return models.RecordingRecord{}, err
 	}
@@ -276,20 +282,31 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	}
 	defer client.Close()
 
-	if err := s.ensureReplayBuffer(obsCtx, client, cfg); err != nil {
+	readiness, err := s.ensureReplayBuffer(obsCtx, client, cfg)
+	record.ReplayBufferStatusAtSave = readiness.Status
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	_ = s.metadata.Upsert(record)
+	if err != nil {
 		return fail(err)
 	}
+	if !readiness.ActiveBefore {
+		return fail(errors.New("OBS replay buffer was not active before this save; it was started for future saves, but this run cannot be safely linked"))
+	}
 
-	sourcePath, err := client.SaveReplayBuffer(obsCtx)
+	saveResult, err := client.SaveReplayBuffer(obsCtx)
 	if err != nil {
 		return fail(fmt.Errorf("OBS replay buffer save failed: %w", err))
 	}
-	record.OBSSourcePath = sourcePath
+	record.OBSSourcePath = saveResult.Path
+	record.CaptureRequestedAt = saveResult.RequestedAt.Format(time.RFC3339Nano)
+	record.CaptureConfirmedAt = saveResult.ConfirmedAt.Format(time.RFC3339Nano)
+	record.OBSReplayFileModTime = saveResult.FileModTime.Format(time.RFC3339Nano)
+	record.CaptureDelayMs = captureDelayMilliseconds(importedAt, saveResult.RequestedAt)
 	if err := s.metadata.Upsert(record); err != nil {
 		return fail(err)
 	}
 
-	finalPath, size, err := moveRecordingFileWithCheck(sourcePath, cfg.RecordingDir, rec.FileName, func(size int64) error {
+	finalPath, size, err := moveRecordingFileWithCheck(saveResult.Path, cfg.RecordingDir, rec.FileName, func(size int64) error {
 		return s.ensureStorageAllowsSave(cfg, size, record.ID)
 	})
 	if err != nil {
@@ -314,21 +331,38 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	return record, nil
 }
 
-func (s *Service) ensureReplayBuffer(ctx context.Context, client *OBSClient, cfg models.RecordingSettings) error {
+type replayBufferReadiness struct {
+	Status       string
+	ActiveBefore bool
+	Started      bool
+}
+
+func (s *Service) ensureReplayBuffer(ctx context.Context, client *OBSClient, cfg models.RecordingSettings) (replayBufferReadiness, error) {
 	status, err := client.GetReplayBufferStatus(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to read OBS replay buffer status: %w", err)
+		return replayBufferReadiness{Status: "unknown"}, fmt.Errorf("failed to read OBS replay buffer status: %w", err)
 	}
 	if status.Active {
-		return nil
+		return replayBufferReadiness{Status: "active", ActiveBefore: true}, nil
 	}
 	if !cfg.AutoStartReplayBuffer {
-		return errors.New("OBS replay buffer is inactive and auto-start is disabled")
+		return replayBufferReadiness{Status: "inactive"}, errors.New("OBS replay buffer is inactive and auto-start is disabled")
 	}
 	if err := client.StartReplayBuffer(ctx); err != nil {
-		return fmt.Errorf("failed to start OBS replay buffer: %w", err)
+		return replayBufferReadiness{Status: "inactive"}, fmt.Errorf("failed to start OBS replay buffer: %w", err)
 	}
-	return nil
+	return replayBufferReadiness{Status: "started_after_save_request", Started: true}, nil
+}
+
+func captureDelayMilliseconds(importedAt, requestedAt time.Time) int64 {
+	if importedAt.IsZero() || requestedAt.IsZero() {
+		return 0
+	}
+	delay := requestedAt.Sub(importedAt)
+	if delay < 0 {
+		return 0
+	}
+	return delay.Milliseconds()
 }
 
 func (s *Service) localStatus() models.RecordingRuntimeStatus {

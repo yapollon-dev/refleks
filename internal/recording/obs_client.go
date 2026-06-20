@@ -32,6 +32,13 @@ type OBSReplayBufferInfo struct {
 	Active bool
 }
 
+type OBSReplaySaveResult struct {
+	Path        string
+	RequestedAt time.Time
+	ConfirmedAt time.Time
+	FileModTime time.Time
+}
+
 type OBSClient struct {
 	cfg       models.RecordingSettings
 	conn      *websocket.Conn
@@ -143,9 +150,9 @@ func (c *OBSClient) StartReplayBuffer(ctx context.Context) error {
 	return err
 }
 
-func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
+func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (OBSReplaySaveResult, error) {
 	if c == nil || c.conn == nil {
-		return "", errors.New("OBS client is not connected")
+		return OBSReplaySaveResult{}, errors.New("OBS client is not connected")
 	}
 
 	requestStarted := time.Now().UTC()
@@ -158,12 +165,12 @@ func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
 		RequestID:   requestID,
 	}
 	if err := c.writeMessage(waitCtx, obsMessage{Op: 6, Data: mustJSON(req)}); err != nil {
-		return "", err
+		return OBSReplaySaveResult{}, err
 	}
 
 	var (
 		responseOK   bool
-		freshPath    string
+		freshResult  OBSReplaySaveResult
 		lastPathErr  error
 		sawSavedPath bool
 	)
@@ -172,26 +179,32 @@ func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
 		if err != nil {
 			if waitCtx.Err() != nil {
 				if lastPathErr != nil {
-					return "", fmt.Errorf("OBS reported a replay path that was not a fresh file: %w", lastPathErr)
+					return OBSReplaySaveResult{}, fmt.Errorf("OBS reported a replay path that was not a fresh file: %w", lastPathErr)
 				}
 				if sawSavedPath {
-					return "", errors.New("OBS did not confirm a fresh replay path after SaveReplayBuffer")
+					return OBSReplaySaveResult{}, errors.New("OBS did not confirm a fresh replay path after SaveReplayBuffer")
 				}
-				return "", errors.New("OBS did not report ReplayBufferSaved after SaveReplayBuffer")
+				return OBSReplaySaveResult{}, errors.New("OBS did not report ReplayBufferSaved after SaveReplayBuffer")
 			}
-			return "", err
+			return OBSReplaySaveResult{}, err
 		}
 
 		if msg.Op == 5 {
 			if path := replaySavedPathFromEvent(msg); path != "" {
 				sawSavedPath = true
-				if err := validateFreshReplayPath(path, requestStarted); err != nil {
+				modTime, err := validateFreshReplayPath(path, requestStarted)
+				if err != nil {
 					lastPathErr = err
 					continue
 				}
-				freshPath = path
+				freshResult = OBSReplaySaveResult{
+					Path:        path,
+					RequestedAt: requestStarted,
+					ConfirmedAt: time.Now().UTC(),
+					FileModTime: modTime,
+				}
 				if responseOK {
-					return freshPath, nil
+					return freshResult, nil
 				}
 			}
 			continue
@@ -202,39 +215,39 @@ func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
 
 		var response obsRequestResponseData
 		if err := json.Unmarshal(msg.Data, &response); err != nil {
-			return "", err
+			return OBSReplaySaveResult{}, err
 		}
 		if response.RequestID != requestID {
 			continue
 		}
 		if !response.RequestStatus.Result {
 			if response.RequestStatus.Comment != "" {
-				return "", fmt.Errorf("OBS request SaveReplayBuffer failed: %s", response.RequestStatus.Comment)
+				return OBSReplaySaveResult{}, fmt.Errorf("OBS request SaveReplayBuffer failed: %s", response.RequestStatus.Comment)
 			}
-			return "", fmt.Errorf("OBS request SaveReplayBuffer failed with code %d", response.RequestStatus.Code)
+			return OBSReplaySaveResult{}, fmt.Errorf("OBS request SaveReplayBuffer failed with code %d", response.RequestStatus.Code)
 		}
 		responseOK = true
-		if freshPath != "" {
-			return freshPath, nil
+		if freshResult.Path != "" {
+			return freshResult, nil
 		}
 	}
 }
 
-func validateFreshReplayPath(path string, requestStarted time.Time) error {
+func validateFreshReplayPath(path string, requestStarted time.Time) (time.Time, error) {
 	if strings.TrimSpace(path) == "" {
-		return errors.New("OBS reported an empty replay path")
+		return time.Time{}, errors.New("OBS reported an empty replay path")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("OBS reported saved replay path %q but it is not available: %w", path, err)
+		return time.Time{}, fmt.Errorf("OBS reported saved replay path %q but it is not available: %w", path, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("OBS reported saved replay path %q but it is a directory", path)
+		return time.Time{}, fmt.Errorf("OBS reported saved replay path %q but it is a directory", path)
 	}
 	if info.ModTime().Before(requestStarted) {
-		return fmt.Errorf("OBS reported stale replay path %q modified before SaveReplayBuffer request", path)
+		return time.Time{}, fmt.Errorf("OBS reported stale replay path %q modified before SaveReplayBuffer request", path)
 	}
-	return nil
+	return info.ModTime().UTC(), nil
 }
 
 func (c *OBSClient) request(ctx context.Context, requestType string, requestData any) (map[string]json.RawMessage, error) {

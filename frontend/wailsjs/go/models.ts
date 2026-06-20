@@ -459,6 +459,12 @@ export namespace models {
 	    playedAt?: string;
 	    keepReason: string;
 	    obsSourcePath?: string;
+	    runImportedAt?: string;
+	    captureRequestedAt?: string;
+	    captureConfirmedAt?: string;
+	    captureDelayMs?: number;
+	    replayBufferStatusAtSave?: string;
+	    obsReplayFileModTime?: string;
 	    videoPath: string;
 	    sizeBytes: number;
 	    status: string;
@@ -483,6 +489,12 @@ export namespace models {
 	        this.playedAt = source["playedAt"];
 	        this.keepReason = source["keepReason"];
 	        this.obsSourcePath = source["obsSourcePath"];
+	        this.runImportedAt = source["runImportedAt"];
+	        this.captureRequestedAt = source["captureRequestedAt"];
+	        this.captureConfirmedAt = source["captureConfirmedAt"];
+	        this.captureDelayMs = source["captureDelayMs"];
+	        this.replayBufferStatusAtSave = source["replayBufferStatusAtSave"];
+	        this.obsReplayFileModTime = source["obsReplayFileModTime"];
 	        this.videoPath = source["videoPath"];
 	        this.sizeBytes = source["sizeBytes"];
 	        this.status = source["status"];
