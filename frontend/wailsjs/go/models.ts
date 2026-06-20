@@ -468,6 +468,28 @@ export namespace models {
 	    obsReplayFileModTime?: string;
 	    videoPath: string;
 	    sizeBytes: number;
+	    rawVideoPath?: string;
+	    rawSizeBytes?: number;
+	    trimmedVideoPath?: string;
+	    trimmedSizeBytes?: number;
+	    activeVideoKind?: string;
+	    trimStatus?: string;
+	    timingSource?: string;
+	    scenarioStartAt?: string;
+	    scenarioEndAt?: string;
+	    requestedClipStartAt?: string;
+	    requestedClipEndAt?: string;
+	    actualClipStartAt?: string;
+	    actualClipEndAt?: string;
+	    replayTimelineStartAt?: string;
+	    replayTimelineEndAt?: string;
+	    replayDurationMs?: number;
+	    clipStartOffsetMs?: number;
+	    clipDurationMs?: number;
+	    preRollSeconds?: number;
+	    postRollSeconds?: number;
+	    trimTruncatedStart?: boolean;
+	    trimTruncatedEnd?: boolean;
 	    status: string;
 	    protected: boolean;
 	    pbAtSave: boolean;
@@ -499,6 +521,28 @@ export namespace models {
 	        this.obsReplayFileModTime = source["obsReplayFileModTime"];
 	        this.videoPath = source["videoPath"];
 	        this.sizeBytes = source["sizeBytes"];
+	        this.rawVideoPath = source["rawVideoPath"];
+	        this.rawSizeBytes = source["rawSizeBytes"];
+	        this.trimmedVideoPath = source["trimmedVideoPath"];
+	        this.trimmedSizeBytes = source["trimmedSizeBytes"];
+	        this.activeVideoKind = source["activeVideoKind"];
+	        this.trimStatus = source["trimStatus"];
+	        this.timingSource = source["timingSource"];
+	        this.scenarioStartAt = source["scenarioStartAt"];
+	        this.scenarioEndAt = source["scenarioEndAt"];
+	        this.requestedClipStartAt = source["requestedClipStartAt"];
+	        this.requestedClipEndAt = source["requestedClipEndAt"];
+	        this.actualClipStartAt = source["actualClipStartAt"];
+	        this.actualClipEndAt = source["actualClipEndAt"];
+	        this.replayTimelineStartAt = source["replayTimelineStartAt"];
+	        this.replayTimelineEndAt = source["replayTimelineEndAt"];
+	        this.replayDurationMs = source["replayDurationMs"];
+	        this.clipStartOffsetMs = source["clipStartOffsetMs"];
+	        this.clipDurationMs = source["clipDurationMs"];
+	        this.preRollSeconds = source["preRollSeconds"];
+	        this.postRollSeconds = source["postRollSeconds"];
+	        this.trimTruncatedStart = source["trimTruncatedStart"];
+	        this.trimTruncatedEnd = source["trimTruncatedEnd"];
 	        this.status = source["status"];
 	        this.protected = source["protected"];
 	        this.pbAtSave = source["pbAtSave"];
@@ -565,6 +609,9 @@ export namespace models {
 	    storageLimitGb: number;
 	    minFreeSpaceGb: number;
 	    autoCleanup: boolean;
+	    preRollSeconds: number;
+	    postRollSeconds: number;
+	    keepRawReplay: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new RecordingSettings(source);
@@ -587,6 +634,9 @@ export namespace models {
 	        this.storageLimitGb = source["storageLimitGb"];
 	        this.minFreeSpaceGb = source["minFreeSpaceGb"];
 	        this.autoCleanup = source["autoCleanup"];
+	        this.preRollSeconds = source["preRollSeconds"];
+	        this.postRollSeconds = source["postRollSeconds"];
+	        this.keepRawReplay = source["keepRawReplay"];
 	    }
 	}
 	export class RunEnvironment {
@@ -800,3 +850,4 @@ export namespace models {
 	}
 
 }
+

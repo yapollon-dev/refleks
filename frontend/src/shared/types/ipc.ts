@@ -187,6 +187,8 @@ export type RecordingKeepReason =
   | 'never_save_scenario'
 export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing' | 'skipped'
 export type RecordingLinkSource = 'auto_completed_run' | 'manual_user_selected' | 'unlinked'
+export type RecordingTrimStatus = 'not_applicable' | 'pending' | 'succeeded' | 'truncated' | 'failed'
+export type RecordingVideoKind = 'raw' | 'trimmed'
 
 export interface RecordingSettings {
   enabled: boolean
@@ -204,6 +206,9 @@ export interface RecordingSettings {
   storageLimitGb: number
   minFreeSpaceGb: number
   autoCleanup: boolean
+  preRollSeconds: number
+  postRollSeconds: number
+  keepRawReplay: boolean
 }
 
 export interface RecordingRecord {
@@ -225,6 +230,28 @@ export interface RecordingRecord {
   obsReplayFileModTime?: string
   videoPath: string
   sizeBytes: number
+  rawVideoPath?: string
+  rawSizeBytes?: number
+  trimmedVideoPath?: string
+  trimmedSizeBytes?: number
+  activeVideoKind?: RecordingVideoKind
+  trimStatus?: RecordingTrimStatus
+  timingSource?: string
+  scenarioStartAt?: string
+  scenarioEndAt?: string
+  requestedClipStartAt?: string
+  requestedClipEndAt?: string
+  actualClipStartAt?: string
+  actualClipEndAt?: string
+  replayTimelineStartAt?: string
+  replayTimelineEndAt?: string
+  replayDurationMs?: number
+  clipStartOffsetMs?: number
+  clipDurationMs?: number
+  preRollSeconds?: number
+  postRollSeconds?: number
+  trimTruncatedStart?: boolean
+  trimTruncatedEnd?: boolean
   status: RecordingStatusValue
   protected: boolean
   pbAtSave: boolean

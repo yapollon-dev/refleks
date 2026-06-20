@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ type Service struct {
 	metadata    *MetadataStore
 	runStore    *runs.Store
 	lastStatus  models.RecordingRuntimeStatus
+	onChanged   func()
 }
 
 var errRecordingAlreadyExists = errors.New("recording already exists for this run")
@@ -42,6 +44,49 @@ func NewService(settingsSvc *appsettings.Service, runStore *runs.Store) (*Servic
 		metadata:    metadata,
 		runStore:    runStore,
 	}, nil
+}
+
+func (s *Service) SetOnChanged(fn func()) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onChanged = fn
+}
+
+func (s *Service) notifyChanged() {
+	if s == nil {
+		return
+	}
+	s.mu.RLock()
+	fn := s.onChanged
+	s.mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+func (s *Service) saveRecords(records []models.RecordingRecord) error {
+	if s == nil || s.metadata == nil {
+		return errors.New("recording service is not initialized")
+	}
+	if err := s.metadata.Save(records); err != nil {
+		return err
+	}
+	s.notifyChanged()
+	return nil
+}
+
+func (s *Service) upsertRecord(record models.RecordingRecord) error {
+	if s == nil || s.metadata == nil {
+		return errors.New("recording service is not initialized")
+	}
+	if err := s.metadata.Upsert(record); err != nil {
+		return err
+	}
+	s.notifyChanged()
+	return nil
 }
 
 func MetadataPath() (string, error) {
@@ -338,12 +383,12 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	if err != nil {
 		return record, err
 	}
-	if err := s.metadata.Upsert(record); err != nil {
+	if err := s.upsertRecord(record); err != nil {
 		return models.RecordingRecord{}, err
 	}
 
 	rec = runs.EnsureRunID(rec)
-	return s.savePreparedRecordingLocked(ctx, cfg, record, rec.FileName, importedAt)
+	return s.savePreparedRecordingLocked(ctx, cfg, record, rec, rec.FileName, importedAt)
 }
 
 func (s *Service) saveUnlinkedReplay(ctx context.Context) (models.RecordingRecord, error) {
@@ -360,23 +405,29 @@ func (s *Service) saveUnlinkedReplay(ctx context.Context) (models.RecordingRecor
 	}
 
 	record := newUnlinkedRecordingRecord()
-	if err := s.metadata.Upsert(record); err != nil {
+	if err := s.upsertRecord(record); err != nil {
 		return models.RecordingRecord{}, err
 	}
-	return s.savePreparedRecordingLocked(ctx, cfg, record, "manual-replay", time.Time{})
+	return s.savePreparedRecordingLocked(ctx, cfg, record, models.RunRecord{}, "manual-replay", time.Time{})
 }
 
-func (s *Service) savePreparedRecordingLocked(ctx context.Context, cfg models.RecordingSettings, record models.RecordingRecord, baseName string, importedAt time.Time) (models.RecordingRecord, error) {
+func (s *Service) savePreparedRecordingLocked(ctx context.Context, cfg models.RecordingSettings, record models.RecordingRecord, rec models.RunRecord, baseName string, importedAt time.Time) (models.RecordingRecord, error) {
 	fail := func(err error) (models.RecordingRecord, error) {
 		record.Status = models.RecordingStatusFailed
 		record.LastError = err.Error()
 		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		_ = s.metadata.Upsert(record)
+		_ = s.upsertRecord(record)
 		return record, err
 	}
 
 	if err := s.ensureStorageAllowsSave(cfg, 0, record.ID); err != nil {
 		return fail(err)
+	}
+
+	if record.RunID != "" {
+		if err := waitForRunClipEnd(ctx, rec, cfg); err != nil {
+			return fail(err)
+		}
 	}
 
 	client := NewOBSClient(cfg)
@@ -390,7 +441,7 @@ func (s *Service) savePreparedRecordingLocked(ctx context.Context, cfg models.Re
 	readiness, err := s.ensureReplayBuffer(obsCtx, client, cfg)
 	record.ReplayBufferStatusAtSave = readiness.Status
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	_ = s.metadata.Upsert(record)
+	_ = s.upsertRecord(record)
 	if err != nil {
 		return fail(err)
 	}
@@ -407,33 +458,192 @@ func (s *Service) savePreparedRecordingLocked(ctx context.Context, cfg models.Re
 	record.CaptureConfirmedAt = saveResult.ConfirmedAt.Format(time.RFC3339Nano)
 	record.OBSReplayFileModTime = saveResult.FileModTime.Format(time.RFC3339Nano)
 	record.CaptureDelayMs = captureDelayMilliseconds(importedAt, saveResult.RequestedAt)
-	if err := s.metadata.Upsert(record); err != nil {
+	if err := s.upsertRecord(record); err != nil {
 		return fail(err)
 	}
 
-	finalPath, size, err := moveRecordingFileWithCheck(saveResult.Path, cfg.RecordingDir, baseName, func(size int64) error {
+	rawPath, rawSize, err := copyRecordingFileWithCheck(saveResult.Path, cfg.RecordingDir, baseName+" - full replay", func(size int64) error {
 		return s.ensureStorageAllowsSave(cfg, size, record.ID)
 	})
 	if err != nil {
 		return fail(err)
 	}
 
-	record.VideoPath = finalPath
-	record.SizeBytes = size
+	record.RawVideoPath = rawPath
+	record.RawSizeBytes = rawSize
+	record.VideoPath = rawPath
+	record.SizeBytes = rawSize
+	record.ActiveVideoKind = models.RecordingVideoKindRaw
+	record.TrimStatus = models.RecordingTrimStatusNotApplicable
 	record.Status = models.RecordingStatusSaved
 	record.LastError = ""
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := s.metadata.Upsert(record); err != nil {
+	if err := s.upsertRecord(record); err != nil {
 		return record, err
+	}
+
+	if record.RunID != "" {
+		record = s.trimRecordingForRunLocked(ctx, cfg, record, rec, baseName, saveResult)
 	}
 	if cfg.AutoCleanup {
 		if _, err := s.runCleanup(map[string]bool{record.ID: true}); err != nil {
 			record.LastError = "recording saved, but automatic cleanup failed: " + err.Error()
 			record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-			_ = s.metadata.Upsert(record)
+			_ = s.upsertRecord(record)
 		}
 	}
 	return record, nil
+}
+
+// waitForRunClipEnd lets configured post-roll enter OBS's replay buffer before requesting a save.
+func waitForRunClipEnd(ctx context.Context, rec models.RunRecord, cfg models.RecordingSettings) error {
+	window, err := determineRunClipWindow(rec, cfg)
+	if err != nil {
+		return nil
+	}
+	wait := time.Until(window.RequestedEnd)
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// trimRecordingForRunLocked keeps the raw replay as the fallback until the trimmed clip has been validated.
+func (s *Service) trimRecordingForRunLocked(ctx context.Context, cfg models.RecordingSettings, record models.RecordingRecord, rec models.RunRecord, baseName string, saveResult OBSReplaySaveResult) models.RecordingRecord {
+	failTrim := func(err error) models.RecordingRecord {
+		record.TrimStatus = models.RecordingTrimStatusFailed
+		record.ActiveVideoKind = models.RecordingVideoKindRaw
+		record.VideoPath = record.RawVideoPath
+		record.SizeBytes = record.RawSizeBytes
+		record.LastError = "recording saved as full replay; trim failed: " + err.Error()
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		_ = s.upsertRecord(record)
+		return record
+	}
+
+	window, err := determineRunClipWindow(rec, cfg)
+	if err != nil {
+		return failTrim(err)
+	}
+	applyRunClipWindowMetadata(&record, window, cfg)
+	record.TrimStatus = models.RecordingTrimStatusPending
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.upsertRecord(record); err != nil {
+		return failTrim(err)
+	}
+
+	toolchain, err := findVideoToolchain()
+	if err != nil {
+		return failTrim(err)
+	}
+	rawDuration, err := probeVideoDuration(ctx, toolchain, record.RawVideoPath)
+	if err != nil {
+		return failTrim(err)
+	}
+	plan, err := buildReplayClipPlan(window, saveResult.RequestedAt, rawDuration)
+	if err != nil {
+		return failTrim(err)
+	}
+	applyReplayClipPlanMetadata(&record, plan, rawDuration)
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	_ = s.upsertRecord(record)
+
+	trimmedPath := uniqueRecordingPath(cfg.RecordingDir, baseName+" - clip", ".mp4")
+	trimmedSize, _, err := trimReplayVideo(ctx, toolchain, record.RawVideoPath, trimmedPath, plan)
+	if err != nil {
+		return failTrim(err)
+	}
+	if cfg.KeepRawReplay {
+		if err := s.ensureStorageAllowsSave(cfg, trimmedSize, record.ID); err != nil {
+			_ = os.Remove(trimmedPath)
+			return failTrim(err)
+		}
+	} else if err := os.Remove(record.RawVideoPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		_ = os.Remove(trimmedPath)
+		return failTrim(fmt.Errorf("trim succeeded but full replay cleanup failed: %w", err))
+	} else {
+		record.RawSizeBytes = 0
+	}
+
+	if err := removeOBSReplaySource(saveResult.Path, record.RawVideoPath, trimmedPath); err != nil {
+		record.LastError = "trimmed clip saved, but OBS source cleanup failed: " + err.Error()
+	}
+	record.TrimmedVideoPath = trimmedPath
+	record.TrimmedSizeBytes = trimmedSize
+	record.VideoPath = trimmedPath
+	record.SizeBytes = trimmedSize
+	record.ActiveVideoKind = models.RecordingVideoKindTrimmed
+	record.TrimStatus = models.RecordingTrimStatusSucceeded
+	if plan.TruncatedStart || plan.TruncatedEnd {
+		record.TrimStatus = models.RecordingTrimStatusTruncated
+	}
+	if record.LastError == "" {
+		record.LastError = ""
+	}
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.upsertRecord(record); err != nil {
+		record.LastError = "trimmed clip saved, but metadata update failed: " + err.Error()
+	}
+	return record
+}
+
+func applyRunClipWindowMetadata(record *models.RecordingRecord, window runClipWindow, cfg models.RecordingSettings) {
+	record.TimingSource = window.Source
+	record.ScenarioStartAt = window.ScenarioStart.Format(time.RFC3339Nano)
+	record.ScenarioEndAt = window.ScenarioEnd.Format(time.RFC3339Nano)
+	record.RequestedClipStartAt = window.RequestedStart.Format(time.RFC3339Nano)
+	record.RequestedClipEndAt = window.RequestedEnd.Format(time.RFC3339Nano)
+	record.PreRollSeconds = cfg.PreRollSeconds
+	record.PostRollSeconds = cfg.PostRollSeconds
+}
+
+func applyReplayClipPlanMetadata(record *models.RecordingRecord, plan replayClipPlan, replayDuration time.Duration) {
+	record.ReplayTimelineStartAt = plan.ReplayStart.Format(time.RFC3339Nano)
+	record.ReplayTimelineEndAt = plan.ReplayEnd.Format(time.RFC3339Nano)
+	record.ActualClipStartAt = plan.ActualStart.Format(time.RFC3339Nano)
+	record.ActualClipEndAt = plan.ActualEnd.Format(time.RFC3339Nano)
+	record.ReplayDurationMs = replayDuration.Milliseconds()
+	record.ClipStartOffsetMs = plan.Offset.Milliseconds()
+	record.ClipDurationMs = plan.Duration.Milliseconds()
+	record.TrimTruncatedStart = plan.TruncatedStart
+	record.TrimTruncatedEnd = plan.TruncatedEnd
+}
+
+func removeOBSReplaySource(sourcePath string, preservedPaths ...string) error {
+	sourcePath = strings.TrimSpace(sourcePath)
+	if sourcePath == "" {
+		return nil
+	}
+	for _, preserved := range preservedPaths {
+		if samePath(sourcePath, preserved) {
+			return nil
+		}
+	}
+	if err := os.Remove(sourcePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+func samePath(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA == nil && errB == nil {
+		return strings.EqualFold(absA, absB)
+	}
+	return strings.EqualFold(a, b)
 }
 
 func (s *Service) upsertAutoAttemptStatus(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time, status models.RecordingStatus, lastError string) (models.RecordingRecord, error) {
@@ -451,7 +661,7 @@ func (s *Service) upsertAutoAttemptStatus(rec models.RunRecord, reason models.Re
 	record.Status = status
 	record.LastError = lastError
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := s.metadata.Upsert(record); err != nil {
+	if err := s.upsertRecord(record); err != nil {
 		return models.RecordingRecord{}, err
 	}
 	return record, nil
@@ -551,7 +761,7 @@ func (s *Service) localStatus() models.RecordingRuntimeStatus {
 			status.TotalRecordings++
 		}
 		if recordingCountsTowardStorage(record) {
-			status.TotalSizeBytes += record.SizeBytes
+			status.TotalSizeBytes += recordingStorageBytes(record)
 		}
 	}
 	status.StorageLimitBytes = gbToBytes(cfg.StorageLimitGB)

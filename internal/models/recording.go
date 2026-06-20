@@ -4,6 +4,8 @@ type RecordingPolicy string
 type RecordingKeepReason string
 type RecordingStatus string
 type RecordingLinkSource string
+type RecordingTrimStatus string
+type RecordingVideoKind string
 
 const (
 	RecordingPolicyEveryRun RecordingPolicy = "every_run"
@@ -28,6 +30,15 @@ const (
 	RecordingLinkSourceAutoCompletedRun RecordingLinkSource = "auto_completed_run"
 	RecordingLinkSourceManualSelected   RecordingLinkSource = "manual_user_selected"
 	RecordingLinkSourceUnlinked         RecordingLinkSource = "unlinked"
+
+	RecordingTrimStatusNotApplicable RecordingTrimStatus = "not_applicable"
+	RecordingTrimStatusPending       RecordingTrimStatus = "pending"
+	RecordingTrimStatusSucceeded     RecordingTrimStatus = "succeeded"
+	RecordingTrimStatusTruncated     RecordingTrimStatus = "truncated"
+	RecordingTrimStatusFailed        RecordingTrimStatus = "failed"
+
+	RecordingVideoKindRaw     RecordingVideoKind = "raw"
+	RecordingVideoKindTrimmed RecordingVideoKind = "trimmed"
 )
 
 type RecordingSettings struct {
@@ -46,6 +57,9 @@ type RecordingSettings struct {
 	StorageLimitGB        int             `json:"storageLimitGb"`
 	MinFreeSpaceGB        int             `json:"minFreeSpaceGb"`
 	AutoCleanup           bool            `json:"autoCleanup"`
+	PreRollSeconds        int             `json:"preRollSeconds"`
+	PostRollSeconds       int             `json:"postRollSeconds"`
+	KeepRawReplay         bool            `json:"keepRawReplay"`
 }
 
 type RecordingRecord struct {
@@ -67,6 +81,28 @@ type RecordingRecord struct {
 	OBSReplayFileModTime     string              `json:"obsReplayFileModTime,omitempty"`
 	VideoPath                string              `json:"videoPath"`
 	SizeBytes                int64               `json:"sizeBytes"`
+	RawVideoPath             string              `json:"rawVideoPath,omitempty"`
+	RawSizeBytes             int64               `json:"rawSizeBytes,omitempty"`
+	TrimmedVideoPath         string              `json:"trimmedVideoPath,omitempty"`
+	TrimmedSizeBytes         int64               `json:"trimmedSizeBytes,omitempty"`
+	ActiveVideoKind          RecordingVideoKind  `json:"activeVideoKind,omitempty"`
+	TrimStatus               RecordingTrimStatus `json:"trimStatus,omitempty"`
+	TimingSource             string              `json:"timingSource,omitempty"`
+	ScenarioStartAt          string              `json:"scenarioStartAt,omitempty"`
+	ScenarioEndAt            string              `json:"scenarioEndAt,omitempty"`
+	RequestedClipStartAt     string              `json:"requestedClipStartAt,omitempty"`
+	RequestedClipEndAt       string              `json:"requestedClipEndAt,omitempty"`
+	ActualClipStartAt        string              `json:"actualClipStartAt,omitempty"`
+	ActualClipEndAt          string              `json:"actualClipEndAt,omitempty"`
+	ReplayTimelineStartAt    string              `json:"replayTimelineStartAt,omitempty"`
+	ReplayTimelineEndAt      string              `json:"replayTimelineEndAt,omitempty"`
+	ReplayDurationMs         int64               `json:"replayDurationMs,omitempty"`
+	ClipStartOffsetMs        int64               `json:"clipStartOffsetMs,omitempty"`
+	ClipDurationMs           int64               `json:"clipDurationMs,omitempty"`
+	PreRollSeconds           int                 `json:"preRollSeconds,omitempty"`
+	PostRollSeconds          int                 `json:"postRollSeconds,omitempty"`
+	TrimTruncatedStart       bool                `json:"trimTruncatedStart,omitempty"`
+	TrimTruncatedEnd         bool                `json:"trimTruncatedEnd,omitempty"`
 	Status                   RecordingStatus     `json:"status"`
 	Protected                bool                `json:"protected"`
 	PBAtSave                 bool                `json:"pbAtSave"`

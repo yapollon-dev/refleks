@@ -2,6 +2,7 @@ package recording
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -111,7 +112,27 @@ func TestStartReplayBufferStartsInactiveBuffer(t *testing.T) {
 	}
 }
 
+func TestServiceChangeCallbackFiresOnMetadataWrites(t *testing.T) {
+	service := newStorageTestService(t, models.RecordingSettings{RecordingDir: t.TempDir()})
+	changes := 0
+	service.SetOnChanged(func() {
+		changes++
+	})
+
+	record := models.RecordingRecord{ID: "recording-1", Status: models.RecordingStatusSaved, VideoPath: "clip.mp4", SizeBytes: 1}
+	if err := service.upsertRecord(record); err != nil {
+		t.Fatalf("upsert record: %v", err)
+	}
+	if err := service.saveRecords([]models.RecordingRecord{record}); err != nil {
+		t.Fatalf("save records: %v", err)
+	}
+	if changes != 2 {
+		t.Fatalf("change callback count = %d, want 2", changes)
+	}
+}
+
 func TestSaveRunReplayRecordsCaptureTimingMetadata(t *testing.T) {
+	trimPlan := withFakeVideoTrim(t, 90*time.Second, []byte("trimmed clip"))
 	replayPath := filepath.Join(t.TempDir(), "confirmed replay.mp4")
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayActive = true
@@ -144,6 +165,24 @@ func TestSaveRunReplayRecordsCaptureTimingMetadata(t *testing.T) {
 	}
 	if record.OBSSourcePath != replayPath || record.VideoPath == "" {
 		t.Fatalf("record should keep source and final paths: %#v", record)
+	}
+	if record.ActiveVideoKind != models.RecordingVideoKindTrimmed || record.TrimStatus != models.RecordingTrimStatusSucceeded {
+		t.Fatalf("record should use validated trimmed clip: %#v", record)
+	}
+	if record.TimingSource == "" || record.ScenarioStartAt == "" || record.ReplayTimelineStartAt == "" {
+		t.Fatalf("record should include run/replay timing metadata: %#v", record)
+	}
+	if trimPlan == nil || trimPlan.Duration <= 0 {
+		t.Fatalf("trim plan should be captured")
+	}
+	if _, err := os.Stat(record.VideoPath); err != nil {
+		t.Fatalf("trimmed video should exist: %v", err)
+	}
+	if _, err := os.Stat(record.RawVideoPath); !os.IsNotExist(err) {
+		t.Fatalf("raw replay copy should be deleted by default after successful trim, stat error = %v", err)
+	}
+	if _, err := os.Stat(replayPath); !os.IsNotExist(err) {
+		t.Fatalf("OBS source replay should be deleted after successful trim, stat error = %v", err)
 	}
 }
 
@@ -179,6 +218,7 @@ func TestSaveRunReplayFailsWhenReplayBufferWasInactiveAtSaveTime(t *testing.T) {
 }
 
 func TestSaveRunReplayRetriesFailedRecordInPlace(t *testing.T) {
+	withFakeVideoTrim(t, 90*time.Second, []byte("retry trim"))
 	replayPath := filepath.Join(t.TempDir(), "retry replay.mp4")
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayActive = true
@@ -222,6 +262,39 @@ func TestSaveRunReplayRetriesFailedRecordInPlace(t *testing.T) {
 	}
 }
 
+func TestSaveRunReplayCanKeepRawReplayAfterSuccessfulTrim(t *testing.T) {
+	withFakeVideoTrim(t, 90*time.Second, []byte("trimmed with raw retained"))
+	replayPath := filepath.Join(t.TempDir(), "keep raw replay.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = true
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = true
+	cfg.AutoStartReplayBuffer = true
+	cfg.KeepRawReplay = true
+	cfg.RecordingDir = t.TempDir()
+	service := newStorageTestService(t, cfg)
+
+	record, err := service.saveRunReplay(context.Background(), recordingRunFixture(), models.RecordingKeepReasonEveryRun, false, time.Now().UTC(), models.RecordingLinkSourceAutoCompletedRun, true)
+	if err != nil {
+		t.Fatalf("save replay: %v", err)
+	}
+	if record.ActiveVideoKind != models.RecordingVideoKindTrimmed || record.TrimStatus != models.RecordingTrimStatusSucceeded {
+		t.Fatalf("record should use trimmed clip: %#v", record)
+	}
+	if _, err := os.Stat(record.RawVideoPath); err != nil {
+		t.Fatalf("raw replay copy should remain when retention is enabled: %v", err)
+	}
+	if _, err := os.Stat(record.TrimmedVideoPath); err != nil {
+		t.Fatalf("trimmed replay should exist: %v", err)
+	}
+	if _, err := os.Stat(replayPath); !os.IsNotExist(err) {
+		t.Fatalf("OBS source replay should still be deleted after successful trim, stat error = %v", err)
+	}
+}
+
 func TestSaveCurrentReplayDefaultsToUnlinkedAndIgnoresAutoEnabled(t *testing.T) {
 	replayPath := filepath.Join(t.TempDir(), "manual unlinked.mp4")
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
@@ -254,6 +327,7 @@ func TestSaveCurrentReplayDefaultsToUnlinkedAndIgnoresAutoEnabled(t *testing.T) 
 }
 
 func TestSaveCurrentReplayLinksOnlyExplicitSelectedRun(t *testing.T) {
+	withFakeVideoTrim(t, 90*time.Second, []byte("manual selected trim"))
 	replayPath := filepath.Join(t.TempDir(), "manual linked.mp4")
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayActive = true
@@ -394,14 +468,47 @@ func TestEnsureReplayBufferStartedNoopsWhenRecordingDisabled(t *testing.T) {
 }
 
 func recordingRunFixture() models.RunRecord {
+	playedAt := time.Now().UTC().Add(-5 * time.Second)
+	startedAt := playedAt.Add(-60 * time.Second)
 	return runs.EnsureRunID(models.RunRecord{
 		FilePath: "C:/runs/run.refleks",
 		FileName: "Smoothbot - Challenge - 2026.06.19-10.00.00",
 		Stats: map[string]any{
-			"Scenario":    "Smoothbot",
-			"Score":       123.4,
-			"Date Played": "2026-06-19T10:00:00Z",
-			"Duration":    60.0,
+			"Scenario":        "Smoothbot",
+			"Score":           123.4,
+			"Date Played":     playedAt.Format(time.RFC3339Nano),
+			"Challenge Start": startedAt.Format("15:04:05.000"),
+			"Duration":        60.0,
 		},
 	})
+}
+
+func withFakeVideoTrim(t *testing.T, rawDuration time.Duration, payload []byte) *replayClipPlan {
+	t.Helper()
+	previousFind := findVideoToolchain
+	previousProbe := probeVideoDuration
+	previousTrim := trimReplayVideo
+	var captured replayClipPlan
+	findVideoToolchain = func() (videoToolchain, error) {
+		return videoToolchain{FFmpeg: "fake-ffmpeg", FFprobe: "fake-ffprobe"}, nil
+	}
+	probeVideoDuration = func(ctx context.Context, toolchain videoToolchain, path string) (time.Duration, error) {
+		return rawDuration, nil
+	}
+	trimReplayVideo = func(ctx context.Context, toolchain videoToolchain, sourcePath, targetPath string, plan replayClipPlan) (int64, time.Duration, error) {
+		if _, err := os.Stat(sourcePath); err != nil {
+			return 0, 0, err
+		}
+		if err := os.WriteFile(targetPath, payload, 0o644); err != nil {
+			return 0, 0, err
+		}
+		captured = plan
+		return int64(len(payload)), plan.Duration, nil
+	}
+	t.Cleanup(func() {
+		findVideoToolchain = previousFind
+		probeVideoDuration = previousProbe
+		trimReplayVideo = previousTrim
+	})
+	return &captured
 }

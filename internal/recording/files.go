@@ -52,6 +52,30 @@ func moveRecordingFile(sourcePath, recordingDir, baseName string) (string, int64
 	return moveRecordingFileWithCheck(sourcePath, recordingDir, baseName, nil)
 }
 
+func copyRecordingFileWithCheck(sourcePath, recordingDir, baseName string, check func(size int64) error) (string, int64, error) {
+	if strings.TrimSpace(sourcePath) == "" {
+		return "", 0, errors.New("OBS did not return a saved replay path")
+	}
+	info, err := waitForStableFile(sourcePath)
+	if err != nil {
+		return "", 0, err
+	}
+	if check != nil {
+		if err := check(info.Size()); err != nil {
+			return "", 0, err
+		}
+	}
+	if err := os.MkdirAll(recordingDir, 0o755); err != nil {
+		return "", 0, fmt.Errorf("failed to create recording folder: %w", err)
+	}
+
+	targetPath := uniqueRecordingPath(recordingDir, baseName, filepath.Ext(sourcePath))
+	if err := copyFile(sourcePath, targetPath); err != nil {
+		return "", 0, fmt.Errorf("failed to copy OBS replay into recording folder: %w", err)
+	}
+	return targetPath, info.Size(), nil
+}
+
 func moveRecordingFileWithCheck(sourcePath, recordingDir, baseName string, check func(size int64) error) (string, int64, error) {
 	if strings.TrimSpace(sourcePath) == "" {
 		return "", 0, errors.New("OBS did not return a saved replay path")

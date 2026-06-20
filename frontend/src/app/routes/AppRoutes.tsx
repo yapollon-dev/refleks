@@ -13,6 +13,7 @@ const HistoryPage = lazy(() => loadHistoryFeature().then(m => ({ default: m.Hist
 const BenchmarksExplorePage = lazy(() => loadBenchmarksFeature().then(m => ({ default: m.BenchmarksExplorePage })))
 const BenchmarkDetailPage = lazy(() => loadBenchmarksFeature().then(m => ({ default: m.BenchmarkDetailPage })))
 const RecordingsPage = lazy(() => loadRecordingsFeature().then(m => ({ default: m.RecordingsPage })))
+const RecordingDetailPage = lazy(() => loadRecordingsFeature().then(m => ({ default: m.RecordingDetailPage })))
 const SettingsPage = lazy(() => loadSettingsFeature().then(m => ({ default: m.SettingsPage })))
 
 function RouteLoading() {
@@ -65,6 +66,7 @@ export function AppRoutes() {
         <Route path="benchmarks" element={<RouteSuspense><BenchmarksExplorePage /></RouteSuspense>} />
         <Route path="benchmarks/:id" element={<RouteSuspense><BenchmarkDetailPage /></RouteSuspense>} />
         <Route path="recordings" element={<RouteSuspense><RecordingsPage /></RouteSuspense>} />
+        <Route path="recordings/:id" element={<RouteSuspense><RecordingDetailPage /></RouteSuspense>} />
         <Route path="settings" element={<RouteSuspense><SettingsPage /></RouteSuspense>} />
       </Route>
     </Routes>

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"refleks/internal/models"
 )
@@ -74,6 +75,40 @@ func TestDeleteRecordingRemovesMetadataAndVideoOnly(t *testing.T) {
 	}
 }
 
+func TestDeleteRecordingRemovesRawAndTrimmedVideos(t *testing.T) {
+	dir := t.TempDir()
+	store := NewMetadataStore(filepath.Join(dir, "recordings.json"))
+	service := &Service{metadata: store}
+
+	rawPath := filepath.Join(dir, "full replay.mp4")
+	trimmedPath := filepath.Join(dir, "clip.mp4")
+	if err := os.WriteFile(rawPath, []byte("raw"), 0o644); err != nil {
+		t.Fatalf("write raw fixture: %v", err)
+	}
+	if err := os.WriteFile(trimmedPath, []byte("trimmed"), 0o644); err != nil {
+		t.Fatalf("write trimmed fixture: %v", err)
+	}
+	record := models.RecordingRecord{
+		ID:               "recording-1",
+		VideoPath:        trimmedPath,
+		RawVideoPath:     rawPath,
+		TrimmedVideoPath: trimmedPath,
+		Status:           models.RecordingStatusSaved,
+	}
+	if err := store.Save([]models.RecordingRecord{record}); err != nil {
+		t.Fatalf("save fixture: %v", err)
+	}
+
+	if err := service.DeleteRecording(record.ID); err != nil {
+		t.Fatalf("delete recording: %v", err)
+	}
+	for _, path := range []string{rawPath, trimmedPath} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s should be deleted, stat error = %v", path, err)
+		}
+	}
+}
+
 func TestRefreshMissingFilesDetectsMissingAndRecovery(t *testing.T) {
 	dir := t.TempDir()
 	store := NewMetadataStore(filepath.Join(dir, "recordings.json"))
@@ -112,5 +147,73 @@ func TestRefreshMissingFilesDetectsMissingAndRecovery(t *testing.T) {
 	}
 	if len(recovered) != 1 || recovered[0].Status != models.RecordingStatusSaved || recovered[0].LastError != "" || recovered[0].SizeBytes != int64(len("restored")) {
 		t.Fatalf("recovered file not reflected in metadata: %#v", recovered)
+	}
+}
+
+func TestRefreshMissingFilesKeepsRecentPendingTrimAsRawFallback(t *testing.T) {
+	dir := t.TempDir()
+	store := NewMetadataStore(filepath.Join(dir, "recordings.json"))
+	service := &Service{metadata: store}
+	rawPath := filepath.Join(dir, "full replay.mp4")
+	if err := os.WriteFile(rawPath, []byte("raw-video"), 0o644); err != nil {
+		t.Fatalf("write raw fixture: %v", err)
+	}
+	record := models.RecordingRecord{
+		ID:              "recording-1",
+		VideoPath:       rawPath,
+		RawVideoPath:    rawPath,
+		RawSizeBytes:    9,
+		Status:          models.RecordingStatusSaved,
+		ActiveVideoKind: models.RecordingVideoKindRaw,
+		TrimStatus:      models.RecordingTrimStatusPending,
+		UpdatedAt:       nowTimestamp(),
+	}
+	if err := store.Save([]models.RecordingRecord{record}); err != nil {
+		t.Fatalf("save fixture: %v", err)
+	}
+
+	records, err := service.RefreshMissingFiles()
+	if err != nil {
+		t.Fatalf("refresh recordings: %v", err)
+	}
+	if len(records) != 1 || records[0].TrimStatus != models.RecordingTrimStatusPending || records[0].ActiveVideoKind != models.RecordingVideoKindRaw {
+		t.Fatalf("recent pending trim should stay pending: %#v", records)
+	}
+	if records[0].LastError != "" || records[0].Status != models.RecordingStatusSaved {
+		t.Fatalf("recent pending trim should not surface a failure: %#v", records[0])
+	}
+}
+
+func TestRefreshMissingFilesRecoversStalePendingTrimAsRawFallback(t *testing.T) {
+	dir := t.TempDir()
+	store := NewMetadataStore(filepath.Join(dir, "recordings.json"))
+	service := &Service{metadata: store}
+	rawPath := filepath.Join(dir, "full replay.mp4")
+	if err := os.WriteFile(rawPath, []byte("raw-video"), 0o644); err != nil {
+		t.Fatalf("write raw fixture: %v", err)
+	}
+	record := models.RecordingRecord{
+		ID:              "recording-1",
+		VideoPath:       rawPath,
+		RawVideoPath:    rawPath,
+		RawSizeBytes:    9,
+		Status:          models.RecordingStatusSaved,
+		ActiveVideoKind: models.RecordingVideoKindRaw,
+		TrimStatus:      models.RecordingTrimStatusPending,
+		UpdatedAt:       time.Now().UTC().Add(-30 * time.Minute).Format(time.RFC3339),
+	}
+	if err := store.Save([]models.RecordingRecord{record}); err != nil {
+		t.Fatalf("save fixture: %v", err)
+	}
+
+	records, err := service.RefreshMissingFiles()
+	if err != nil {
+		t.Fatalf("refresh recordings: %v", err)
+	}
+	if len(records) != 1 || records[0].TrimStatus != models.RecordingTrimStatusFailed || records[0].ActiveVideoKind != models.RecordingVideoKindRaw {
+		t.Fatalf("stale pending trim should become raw fallback: %#v", records)
+	}
+	if records[0].LastError == "" || records[0].Status != models.RecordingStatusSaved {
+		t.Fatalf("stale pending trim should keep saved raw video with an error: %#v", records[0])
 	}
 }

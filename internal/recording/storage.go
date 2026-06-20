@@ -59,15 +59,15 @@ func (s *Service) runCleanup(excludedIDs map[string]bool) (models.RecordingClean
 			remaining = append(remaining, record)
 			continue
 		}
-		if path := strings.TrimSpace(record.VideoPath); path != "" {
+		for _, path := range recordingVideoPaths(record) {
 			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return preview, fmt.Errorf("failed to delete cleanup candidate %q: %w", record.VideoPath, err)
+				return preview, fmt.Errorf("failed to delete cleanup candidate %q: %w", path, err)
 			}
 		}
 		preview.DeletedCount++
-		preview.DeletedBytes += record.SizeBytes
+		preview.DeletedBytes += recordingStorageBytes(record)
 	}
-	if err := s.metadata.Save(remaining); err != nil {
+	if err := s.saveRecords(remaining); err != nil {
 		return preview, err
 	}
 	preview.TotalSizeBytes -= preview.DeletedBytes
@@ -181,7 +181,7 @@ func (s *Service) ensureStorageAllowsSave(cfg models.RecordingSettings, incoming
 	candidates := cleanupCandidates(records, excludedIDs, &preview)
 	var reclaimable int64
 	for _, candidate := range candidates {
-		reclaimable += candidate.SizeBytes
+		reclaimable += recordingStorageBytes(candidate)
 	}
 	if reclaimable < overage {
 		return fmt.Errorf(
@@ -221,7 +221,7 @@ func cleanupItem(record models.RecordingRecord) models.RecordingCleanupItem {
 		ID:         record.ID,
 		Scenario:   record.Scenario,
 		VideoPath:  record.VideoPath,
-		SizeBytes:  record.SizeBytes,
+		SizeBytes:  recordingStorageBytes(record),
 		KeepReason: record.KeepReason,
 		CreatedAt:  record.CreatedAt,
 		Protected:  record.Protected,
@@ -242,7 +242,7 @@ func recordingStorageUsage(records []models.RecordingRecord) int64 {
 	var total int64
 	for _, record := range records {
 		if recordingCountsTowardStorage(record) {
-			total += record.SizeBytes
+			total += recordingStorageBytes(record)
 		}
 	}
 	return total
@@ -253,7 +253,41 @@ func recordingCountsAsSaved(record models.RecordingRecord) bool {
 }
 
 func recordingCountsTowardStorage(record models.RecordingRecord) bool {
-	return recordingCountsAsSaved(record) && record.SizeBytes > 0
+	return recordingCountsAsSaved(record) && recordingStorageBytes(record) > 0
+}
+
+func recordingStorageBytes(record models.RecordingRecord) int64 {
+	if !recordingCountsAsSaved(record) {
+		return 0
+	}
+	type pathSize struct {
+		path string
+		size int64
+	}
+	items := []pathSize{
+		{record.VideoPath, record.SizeBytes},
+		{record.RawVideoPath, record.RawSizeBytes},
+		{record.TrimmedVideoPath, record.TrimmedSizeBytes},
+	}
+	seen := map[string]bool{}
+	var total int64
+	for _, item := range items {
+		if item.size <= 0 || strings.TrimSpace(item.path) == "" {
+			continue
+		}
+		key := item.path
+		if abs, err := filepath.Abs(item.path); err == nil {
+			key = strings.ToLower(abs)
+		} else {
+			key = strings.ToLower(item.path)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		total += item.size
+	}
+	return total
 }
 
 func requiredCleanupBytes(totalSize, storageLimit, freeBytes, minFreeBytes int64) int64 {

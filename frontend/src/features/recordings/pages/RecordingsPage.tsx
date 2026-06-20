@@ -9,58 +9,23 @@ import {
 } from '@/shared/components'
 import {
   deleteRecording,
-  getRecentRuns,
-  getRecordings,
   getRecordingStatus,
-  openRecording,
   previewRecordingCleanup,
   refreshRecordingFiles,
   revealRecording,
   runRecordingCleanup,
-  saveCurrentReplay,
   setRecordingProtected,
-  startRecordingReplayBuffer,
-  testRecordingConnection,
 } from '@/shared/lib'
-import type { RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RecordingStatusValue, RunRecord } from '@/shared/types'
+import type { RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RecordingStatusValue } from '@/shared/types'
 import { EventsOn } from '@wails/runtime'
-import { ExternalLink, FolderOpen, HardDrive, Lock, LockOpen, RefreshCw, Save, Search, Trash2, Video } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { FolderOpen, HardDrive, Lock, LockOpen, RefreshCw, Search, Trash2, Video } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { formatBytes, formatLabel, formatRecordingDate, formatRecordingScore, recordingScenarioLabel, recordingTitle } from '../lib/recordingFormat'
 
 type StatusFilter = 'all' | RecordingStatusValue
 type ProtectionFilter = 'all' | 'protected' | 'unprotected'
 type SortMode = 'newest' | 'oldest' | 'scenario' | 'status' | 'size_desc'
-
-const manualReplayUnlinkedValue = '__unlinked__'
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let value = bytes
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
-}
-
-function formatLabel(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
-}
-
-function runScenario(run: RunRecord): string {
-  const scenario = run.stats?.['Scenario']
-  if (typeof scenario === 'string' && scenario.trim()) return scenario.trim()
-  if (run.fileName.includes(' - ')) return run.fileName.split(' - ')[0].trim()
-  return run.fileName || 'Unknown run'
-}
-
-function runDateLabel(run: RunRecord): string {
-  const raw = run.stats?.['Date Played']
-  const parsed = raw ? Date.parse(String(raw)) : 0
-  return Number.isFinite(parsed) && parsed > 0 ? new Date(parsed).toLocaleString() : 'No date'
-}
 
 function statusClass(status: RecordingStatusValue): string {
   if (status === 'saved') return 'bg-success/10 text-success'
@@ -81,17 +46,20 @@ function checkedAtLabel(value?: string): string {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleTimeString() : ''
 }
 
+function clipStatusLabel(recording: RecordingRecord): string {
+  if (recording.trimStatus === 'succeeded') return 'Exact Clip'
+  if (recording.trimStatus === 'truncated') return 'Truncated Clip'
+  if (recording.trimStatus === 'failed') return 'Full Replay Fallback'
+  if (recording.trimStatus === 'pending') return 'Trim Pending'
+  return ''
+}
+
 export function RecordingsPage() {
+  const navigate = useNavigate()
   const [status, setStatus] = useState<RecordingRuntimeStatus | null>(null)
   const [recordings, setRecordings] = useState<RecordingRecord[]>([])
-  const [manualRuns, setManualRuns] = useState<RunRecord[]>([])
-  const [manualRunId, setManualRunId] = useState(manualReplayUnlinkedValue)
   const [cleanupPreview, setCleanupPreview] = useState<RecordingCleanupPreview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [testing, setTesting] = useState(false)
-  const [startingReplayBuffer, setStartingReplayBuffer] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [refreshingFiles, setRefreshingFiles] = useState(false)
   const [previewingCleanup, setPreviewingCleanup] = useState(false)
   const [runningCleanup, setRunningCleanup] = useState(false)
   const [busyId, setBusyId] = useState('')
@@ -100,42 +68,54 @@ export function RecordingsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [protectionFilter, setProtectionFilter] = useState<ProtectionFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('newest')
+  const refreshTimer = useRef<number | null>(null)
 
-  const load = async () => {
-    setLoading(true)
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     setError('')
     try {
       const [nextStatus, nextRecordings] = await Promise.all([
         getRecordingStatus(),
-        getRecordings(),
+        refreshRecordingFiles(),
       ])
       setStatus(nextStatus)
       setRecordings(nextRecordings)
-      setManualRuns(await getRecentRuns(20))
       setCleanupPreview(await previewRecordingCleanup())
     } catch (e) {
       setError((e as Error)?.message || 'Failed to load recordings')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [load])
 
   useEffect(() => {
+    const scheduleLoad = () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current)
+      }
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null
+        void load(false)
+      }, 200)
+    }
     const offRecordings = EventsOn('recordings:changed', () => {
-      void load()
+      scheduleLoad()
     })
     const offStatus = EventsOn('recording:status:changed', () => {
-      void load()
+      scheduleLoad()
     })
     return () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current)
+      }
       offRecordings()
       offStatus()
     }
-  }, [])
+  }, [load])
 
   const visibleRecordings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -149,8 +129,11 @@ export function RecordingsPage() {
         recording.runFileName,
         recording.runId,
         recording.videoPath,
+        recording.rawVideoPath,
+        recording.trimmedVideoPath,
         recording.keepReason,
         recording.linkSource,
+        recording.trimStatus,
         recording.lastError,
       ].join(' ').toLowerCase()
       return haystack.includes(normalizedQuery)
@@ -164,77 +147,6 @@ export function RecordingsPage() {
       return sortTimestamp(b.createdAt) - sortTimestamp(a.createdAt)
     })
   }, [protectionFilter, query, recordings, sortMode, statusFilter])
-
-  const handleTestConnection = async () => {
-    setTesting(true)
-    setError('')
-    try {
-      setStatus(await testRecordingConnection())
-    } catch (e) {
-      setError((e as Error)?.message || 'Failed to test OBS connection')
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  const handleStartReplayBuffer = async () => {
-    setStartingReplayBuffer(true)
-    setError('')
-    try {
-      setStatus(await startRecordingReplayBuffer())
-    } catch (e) {
-      setError((e as Error)?.message || 'Failed to start OBS replay buffer')
-    } finally {
-      setStartingReplayBuffer(false)
-    }
-  }
-
-  const handleSaveCurrentReplay = async () => {
-    setSaving(true)
-    setError('')
-    try {
-      await saveCurrentReplay(manualRunId === manualReplayUnlinkedValue ? '' : manualRunId)
-      await load()
-    } catch (e) {
-      setError((e as Error)?.message || 'Failed to save current replay')
-      try {
-        setRecordings(await getRecordings())
-      } catch {
-        // Keep the primary save error visible.
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleRefreshFiles = async () => {
-    setRefreshingFiles(true)
-    setError('')
-    try {
-      const nextRecordings = await refreshRecordingFiles()
-      const nextStatus = await getRecordingStatus()
-      setRecordings(nextRecordings)
-      setStatus(nextStatus)
-      setCleanupPreview(await previewRecordingCleanup())
-    } catch (e) {
-      setError((e as Error)?.message || 'Failed to refresh recording files')
-    } finally {
-      setRefreshingFiles(false)
-    }
-  }
-
-  const handleOpen = async (recording: RecordingRecord) => {
-    setBusyId(recording.id)
-    setError('')
-    try {
-      await openRecording(recording.id)
-    } catch (e) {
-      setError((e as Error)?.message || 'Failed to open recording')
-      setRecordings(await refreshRecordingFiles())
-    } finally {
-      setBusyId('')
-    }
-  }
 
   const handleReveal = async (recording: RecordingRecord) => {
     setBusyId(recording.id)
@@ -263,7 +175,7 @@ export function RecordingsPage() {
   }
 
   const handleDelete = async (recording: RecordingRecord) => {
-    const label = recording.scenario || recording.runFileName || 'this recording'
+    const label = recordingTitle(recording)
     if (!window.confirm(`Delete ${label}? This removes only the recording metadata and video file, not the run.`)) return
 
     setBusyId(recording.id)
@@ -302,7 +214,7 @@ export function RecordingsPage() {
       setCleanupPreview(result)
       const [nextStatus, nextRecordings] = await Promise.all([
         getRecordingStatus(),
-        getRecordings(),
+        refreshRecordingFiles(),
       ])
       setStatus(nextStatus)
       setRecordings(nextRecordings)
@@ -324,42 +236,9 @@ export function RecordingsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
       <div className="sticky top-0 z-10 bg-canvas/95 px-5 py-4 backdrop-blur">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-0.5">
-            <h1 className="text-lg font-semibold text-foreground">Recordings</h1>
-            <p className="text-xs text-surface-muted-foreground">OBS replay metadata, connection status, and local file actions.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Select value={manualRunId} onValueChange={setManualRunId}>
-              <SelectTrigger className="w-[18rem] max-w-full" title="Manual replay link target">
-                <SelectValue placeholder="Manual save target" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={manualReplayUnlinkedValue}>Unlinked recording</SelectItem>
-                {manualRuns.filter(run => !!run.runId).map(run => (
-                  <SelectItem key={run.runId} value={run.runId as string}>
-                    {runScenario(run)} · {runDateLabel(run)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => void handleSaveCurrentReplay()} disabled={saving} variant="default" size="sm">
-              {saving ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-1.5 h-4 w-4" />Save Current Replay</>}
-            </Button>
-            <Button onClick={() => void handleRefreshFiles()} disabled={refreshingFiles} variant="outline" size="sm">
-              {refreshingFiles ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Detect Missing
-            </Button>
-            <Button onClick={() => void handleTestConnection()} disabled={testing} variant="outline" size="sm">
-              {testing ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS'}
-            </Button>
-            <Button onClick={() => void handleStartReplayBuffer()} disabled={startingReplayBuffer} variant="outline" size="sm">
-              {startingReplayBuffer ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Starting...</> : 'Start Buffer'}
-            </Button>
-            <Button onClick={() => void load()} disabled={loading} variant="outline" size="sm">
-              {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Refresh'}
-            </Button>
-          </div>
+        <div className="space-y-0.5">
+          <h1 className="text-lg font-semibold text-foreground">Recordings</h1>
+          <p className="text-xs text-surface-muted-foreground">OBS replay metadata, connection status, and local file actions.</p>
         </div>
       </div>
 
@@ -393,32 +272,7 @@ export function RecordingsPage() {
             <div className="mt-2 text-base font-medium text-foreground">{formatBytes(storageLimit)}</div>
           </div>
         </div>
-
-        <div className="mt-4 rounded-xl bg-surface px-5 py-4 shadow-sm">
-          <div className="space-y-1">
-            <h2 className="text-sm font-medium text-foreground">Recording folder</h2>
-            <p className="break-all font-mono text-xs text-surface-muted-foreground">
-              {status?.recordingDir || 'Not configured'}
-            </p>
-          </div>
-          {status?.metadataPath && (
-            <div className="mt-4 space-y-1">
-              <h2 className="text-sm font-medium text-foreground">Metadata file</h2>
-              <p className="break-all font-mono text-xs text-surface-muted-foreground">{status.metadataPath}</p>
-            </div>
-          )}
-          {(status?.obsVersion || status?.obsWebSocketVersion) && (
-            <div className="mt-4 space-y-1">
-              <h2 className="text-sm font-medium text-foreground">OBS versions</h2>
-              <p className="text-xs text-surface-muted-foreground">
-                OBS {status.obsVersion || 'unknown'} · WebSocket {status.obsWebSocketVersion || 'unknown'}
-              </p>
-            </div>
-          )}
-          {status?.lastError && (
-            <p className="mt-4 text-xs text-destructive">{status.lastError}</p>
-          )}
-        </div>
+        {status?.lastError && <p className="mt-3 text-xs text-destructive">{status.lastError}</p>}
 
         <div className="mt-4 rounded-xl bg-surface px-5 py-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -546,7 +400,7 @@ export function RecordingsPage() {
             <Video className="mx-auto h-8 w-8 text-surface-muted-foreground" />
             <h2 className="mt-3 text-sm font-medium text-foreground">No recordings yet</h2>
             <p className="mx-auto mt-1 max-w-xl text-xs text-surface-muted-foreground">
-              Use Save Current Replay to save the current OBS replay buffer. It stays unlinked unless you select a run first.
+              New clips appear here automatically after eligible completed runs are saved.
             </p>
           </div>
         ) : visibleRecordings.length === 0 ? (
@@ -559,7 +413,7 @@ export function RecordingsPage() {
         ) : (
           <div className="mt-4 overflow-hidden rounded-xl bg-surface shadow-sm">
             <div className="border-b border-surface-border px-5 py-4">
-              <h2 className="text-sm font-medium text-foreground">Recording metadata</h2>
+              <h2 className="text-sm font-medium text-foreground">Recording</h2>
               <p className="mt-1 text-xs text-surface-muted-foreground">
                 Showing {visibleRecordings.length} of {recordings.length} recordings.
               </p>
@@ -568,11 +422,36 @@ export function RecordingsPage() {
               {visibleRecordings.map(recording => {
                 const canUseVideo = !!recording.videoPath && recording.status !== 'missing'
                 const rowBusy = busyId === recording.id
+                const selectRecording = () => {
+                  if (canUseVideo) navigate(`/recordings/${encodeURIComponent(recording.id)}`)
+                }
+                const selectRecordingWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  selectRecording()
+                }
+                const stopActionClick = (event: MouseEvent<HTMLButtonElement>) => {
+                  event.stopPropagation()
+                }
                 return (
-                  <div key={recording.id} className="grid gap-3 px-5 py-4 xl:grid-cols-[1.2fr_0.45fr_0.65fr_0.55fr_1.25fr_0.85fr]">
+                  <div
+                    key={recording.id}
+                    role={canUseVideo ? 'button' : undefined}
+                    tabIndex={canUseVideo ? 0 : undefined}
+                    onClick={selectRecording}
+                    onKeyDown={selectRecordingWithKeyboard}
+                    className={`grid gap-3 px-5 py-4 transition-colors xl:grid-cols-[1.2fr_0.45fr_0.65fr_0.55fr_1.25fr_0.7fr] ${canUseVideo ? 'cursor-pointer hover:bg-surface-subtle/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50' : ''}`}
+                  >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-foreground">{recording.scenario || recording.runFileName || 'Unlinked recording'}</div>
-                      <div className="mt-1 truncate text-xs text-surface-muted-foreground">{recording.playedAt || recording.runId || formatLabel(recording.linkSource || 'unlinked')}</div>
+                      <div className="flex min-w-0 items-baseline gap-1.5 text-sm font-medium text-foreground">
+                        <span className="min-w-0 truncate">{recordingScenarioLabel(recording)}</span>
+                        {Number.isFinite(recording.score) && recording.score > 0 && (
+                          <span className="shrink-0 text-surface-muted-foreground">- {formatRecordingScore(recording.score)}</span>
+                        )}
+                      </div>
+                      <div className="mt-1 truncate text-xs text-surface-muted-foreground">
+                        {formatRecordingDate(recording.playedAt) || recording.runId || formatLabel(recording.linkSource || 'unlinked')}
+                      </div>
                       {recording.protected && (
                         <div className="mt-2 inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
                           <Lock className="mr-1 h-3 w-3" />Protected
@@ -588,6 +467,9 @@ export function RecordingsPage() {
                     <div>
                       <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Reason</div>
                       <div className="mt-1 text-sm text-foreground">{formatLabel(recording.keepReason)}</div>
+                      {clipStatusLabel(recording) && (
+                        <div className="mt-1 text-xs text-surface-muted-foreground">{clipStatusLabel(recording)}</div>
+                      )}
                     </div>
                     <div>
                       <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Size</div>
@@ -595,22 +477,19 @@ export function RecordingsPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Video path</div>
-                      <div className="mt-1 truncate font-mono text-xs text-surface-muted-foreground" title={recording.videoPath || recording.obsSourcePath || ''}>
-                        {recording.videoPath || recording.obsSourcePath || 'Not saved yet'}
+                      <div className="mt-1 truncate font-mono text-xs text-surface-muted-foreground" title={recording.videoPath || ''}>
+                        {recording.videoPath || 'Not saved yet'}
                       </div>
                       {recording.lastError && <div className="mt-1 text-xs text-destructive">{recording.lastError}</div>}
                     </div>
                     <div className="flex flex-wrap content-start justify-end gap-1.5">
-                      <Button size="sm" variant="outline" disabled={!canUseVideo || rowBusy} onClick={() => void handleOpen(recording)} title="Open video">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={!canUseVideo || rowBusy} onClick={() => void handleReveal(recording)} title="Reveal in Explorer">
+                      <Button size="sm" variant="outline" disabled={!canUseVideo || rowBusy} onClick={event => { stopActionClick(event); void handleReveal(recording) }} title="Reveal in Explorer">
                         <FolderOpen className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => void handleProtect(recording)} title={recording.protected ? 'Unprotect recording' : 'Protect recording'}>
+                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={event => { stopActionClick(event); void handleProtect(recording) }} title={recording.protected ? 'Unprotect recording' : 'Protect recording'}>
                         {recording.protected ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => void handleDelete(recording)} title="Delete recording">
+                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={event => { stopActionClick(event); void handleDelete(recording) }} title="Delete recording">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>

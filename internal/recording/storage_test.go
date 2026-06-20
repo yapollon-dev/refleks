@@ -118,14 +118,15 @@ func TestEnsureStorageAllowsSaveUsesAutoCleanupCapacity(t *testing.T) {
 func TestRecordingStorageUsageCountsOnlySavedVideos(t *testing.T) {
 	records := []models.RecordingRecord{
 		{ID: "saved", Status: models.RecordingStatusSaved, VideoPath: "saved.mp4", SizeBytes: 10},
+		{ID: "with-raw", Status: models.RecordingStatusSaved, VideoPath: "clip.mp4", SizeBytes: 7, RawVideoPath: "full.mp4", RawSizeBytes: 13, TrimmedVideoPath: "clip.mp4", TrimmedSizeBytes: 7},
 		{ID: "failed", Status: models.RecordingStatusFailed, VideoPath: "failed.mp4", SizeBytes: 20},
 		{ID: "missing", Status: models.RecordingStatusMissing, VideoPath: "missing.mp4", SizeBytes: 30},
 		{ID: "skipped", Status: models.RecordingStatusSkipped, SizeBytes: 40},
 		{ID: "no-path", Status: models.RecordingStatusSaved, SizeBytes: 50},
 	}
 
-	if got := recordingStorageUsage(records); got != 10 {
-		t.Fatalf("storage usage = %d, want 10", got)
+	if got := recordingStorageUsage(records); got != 30 {
+		t.Fatalf("storage usage = %d, want 30", got)
 	}
 }
 
@@ -134,6 +135,7 @@ func TestLocalStatusCountsOnlySavedVideos(t *testing.T) {
 	service := newStorageTestService(t, cfg)
 	if err := service.metadata.Save([]models.RecordingRecord{
 		{ID: "saved", Status: models.RecordingStatusSaved, VideoPath: "saved.mp4", SizeBytes: 10},
+		{ID: "with-raw", Status: models.RecordingStatusSaved, VideoPath: "clip.mp4", SizeBytes: 7, RawVideoPath: "full.mp4", RawSizeBytes: 13, TrimmedVideoPath: "clip.mp4", TrimmedSizeBytes: 7},
 		{ID: "failed", Status: models.RecordingStatusFailed, VideoPath: "failed.mp4", SizeBytes: 20},
 		{ID: "skipped", Status: models.RecordingStatusSkipped, SizeBytes: 30},
 	}); err != nil {
@@ -141,7 +143,7 @@ func TestLocalStatusCountsOnlySavedVideos(t *testing.T) {
 	}
 
 	status := service.localStatus()
-	if status.TotalRecordings != 1 || status.TotalSizeBytes != 10 {
+	if status.TotalRecordings != 2 || status.TotalSizeBytes != 30 {
 		t.Fatalf("status totals should count saved videos only, got %#v", status)
 	}
 }

@@ -25,6 +25,12 @@ func TestDefaultRecordingSettings(t *testing.T) {
 	if !got.AutoConnect || !got.AutoStartReplayBuffer {
 		t.Fatalf("auto connect and auto-start replay buffer should default to true")
 	}
+	if got.PreRollSeconds != constants.DefaultRecordingPreRollSeconds || got.PostRollSeconds != constants.DefaultRecordingPostRollSeconds {
+		t.Fatalf("pre/post roll = %d/%d, want %d/%d", got.PreRollSeconds, got.PostRollSeconds, constants.DefaultRecordingPreRollSeconds, constants.DefaultRecordingPostRollSeconds)
+	}
+	if got.KeepRawReplay {
+		t.Fatalf("raw replay retention should default to disabled")
+	}
 	if got.SavePolicy != models.RecordingPolicyEveryRun {
 		t.Fatalf("save policy = %q, want %q", got.SavePolicy, models.RecordingPolicyEveryRun)
 	}
@@ -48,6 +54,9 @@ func TestSanitizeRecordingSettingsAppliesDefaults(t *testing.T) {
 	}
 	if got.RecordingDir == "" {
 		t.Fatalf("recording dir should be defaulted")
+	}
+	if got.PreRollSeconds != constants.DefaultRecordingPreRollSeconds || got.PostRollSeconds != constants.DefaultRecordingPostRollSeconds {
+		t.Fatalf("pre/post roll should be defaulted, got %d/%d", got.PreRollSeconds, got.PostRollSeconds)
 	}
 }
 

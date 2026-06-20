@@ -61,6 +61,9 @@ func DefaultRecordingSettings() models.RecordingSettings {
 		StorageLimitGB:        constants.DefaultRecordingStorageLimitGB,
 		MinFreeSpaceGB:        constants.DefaultRecordingMinFreeSpaceGB,
 		AutoCleanup:           false,
+		PreRollSeconds:        constants.DefaultRecordingPreRollSeconds,
+		PostRollSeconds:       constants.DefaultRecordingPostRollSeconds,
+		KeepRawReplay:         false,
 	}
 }
 
@@ -154,6 +157,12 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 	if r.MinFreeSpaceGB <= 0 {
 		r.MinFreeSpaceGB = defaults.MinFreeSpaceGB
 	}
+	if r.PreRollSeconds <= 0 {
+		r.PreRollSeconds = defaults.PreRollSeconds
+	}
+	if r.PostRollSeconds <= 0 {
+		r.PostRollSeconds = defaults.PostRollSeconds
+	}
 	if strings.TrimSpace(r.OBSPassword) != "" || strings.TrimSpace(r.OBSPasswordProtected) != "" {
 		r.OBSPasswordSet = true
 	}
@@ -184,7 +193,10 @@ func recordingSettingsAbsent(r models.RecordingSettings) bool {
 		strings.TrimSpace(r.RecordingDir) == "" &&
 		r.StorageLimitGB == 0 &&
 		r.MinFreeSpaceGB == 0 &&
-		!r.AutoCleanup
+		!r.AutoCleanup &&
+		r.PreRollSeconds == 0 &&
+		r.PostRollSeconds == 0 &&
+		!r.KeepRawReplay
 }
 
 // GetConfigDir returns the application config directory under the user's home dir: $HOME/.refleks

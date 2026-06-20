@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -52,14 +53,14 @@ func (s *Service) DeleteRecording(id string) error {
 		return fmt.Errorf("recording %q not found", id)
 	}
 
-	if path := strings.TrimSpace(record.VideoPath); path != "" {
+	for _, path := range recordingVideoPaths(record) {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
 
 	records = append(records[:index], records[index+1:]...)
-	return s.metadata.Save(records)
+	return s.saveRecords(records)
 }
 
 func (s *Service) RefreshMissingFiles() ([]models.RecordingRecord, error) {
@@ -84,7 +85,7 @@ func (s *Service) RefreshMissingFiles() ([]models.RecordingRecord, error) {
 		}
 	}
 	if changed {
-		if err := s.metadata.Save(records); err != nil {
+		if err := s.saveRecords(records); err != nil {
 			return nil, err
 		}
 	}
@@ -105,6 +106,14 @@ func (s *Service) RevealRecording(id string) error {
 		return err
 	}
 	return revealVideoPath(record.VideoPath)
+}
+
+func (s *Service) VideoPath(id string) (string, error) {
+	record, err := s.requireExistingVideo(id)
+	if err != nil {
+		return "", err
+	}
+	return record.VideoPath, nil
 }
 
 func (s *Service) requireExistingVideo(id string) (models.RecordingRecord, error) {
@@ -149,7 +158,7 @@ func (s *Service) updateRecording(id string, mutate func(*models.RecordingRecord
 		if err := mutate(&records[i]); err != nil {
 			return models.RecordingRecord{}, err
 		}
-		if err := s.metadata.Save(records); err != nil {
+		if err := s.saveRecords(records); err != nil {
 			return models.RecordingRecord{}, err
 		}
 		return records[i], nil
@@ -165,10 +174,37 @@ func refreshRecordingFileState(record models.RecordingRecord) (models.RecordingR
 
 	info, err := os.Stat(path)
 	if err == nil && !info.IsDir() {
+		record = refreshAuxiliaryVideoSizes(record, path)
+		if record.TrimStatus == models.RecordingTrimStatusPending && samePath(path, record.RawVideoPath) {
+			if !pendingTrimIsStale(record, time.Now().UTC()) {
+				changed := false
+				if record.Status == models.RecordingStatusMissing {
+					record.Status = models.RecordingStatusSaved
+					changed = true
+				}
+				if record.SizeBytes != info.Size() {
+					record.SizeBytes = info.Size()
+					record = syncActiveVideoSize(record, path, info.Size())
+					changed = true
+				}
+				if changed {
+					record.UpdatedAt = nowTimestamp()
+				}
+				return record, changed, nil
+			}
+			record.TrimStatus = models.RecordingTrimStatusFailed
+			record.ActiveVideoKind = models.RecordingVideoKindRaw
+			record.LastError = "trim did not complete; using the retained full replay"
+			record.SizeBytes = info.Size()
+			record = syncActiveVideoSize(record, path, info.Size())
+			record.UpdatedAt = nowTimestamp()
+			return record, true, nil
+		}
 		if record.Status == models.RecordingStatusMissing || record.LastError == missingVideoError || record.SizeBytes != info.Size() {
 			record.Status = models.RecordingStatusSaved
 			record.LastError = ""
 			record.SizeBytes = info.Size()
+			record = syncActiveVideoSize(record, path, info.Size())
 			record.UpdatedAt = nowTimestamp()
 			return record, true, nil
 		}
@@ -189,6 +225,15 @@ func refreshRecordingFileState(record models.RecordingRecord) (models.RecordingR
 	if !errors.Is(err, os.ErrNotExist) {
 		return record, false, err
 	}
+	if fallback, ok := existingRawFallback(record); ok {
+		record.VideoPath = fallback.path
+		record.SizeBytes = fallback.size
+		record.ActiveVideoKind = models.RecordingVideoKindRaw
+		record.TrimStatus = models.RecordingTrimStatusFailed
+		record.LastError = "trimmed recording video file is missing; falling back to full replay"
+		record.UpdatedAt = nowTimestamp()
+		return record, true, nil
+	}
 	if record.Status == models.RecordingStatusSaved || record.Status == models.RecordingStatusPending || record.Status == models.RecordingStatusMissing {
 		if record.Status != models.RecordingStatusMissing || record.LastError != missingVideoError || record.SizeBytes != 0 {
 			record.Status = models.RecordingStatusMissing
@@ -199,6 +244,99 @@ func refreshRecordingFileState(record models.RecordingRecord) (models.RecordingR
 		}
 	}
 	return record, false, nil
+}
+
+func pendingTrimIsStale(record models.RecordingRecord, now time.Time) bool {
+	startedAt := recordingTimestamp(record.UpdatedAt)
+	if startedAt.IsZero() {
+		startedAt = recordingTimestamp(record.CreatedAt)
+	}
+	if startedAt.IsZero() {
+		return false
+	}
+	return now.Sub(startedAt) > stalePendingTrimAfter(record)
+}
+
+func stalePendingTrimAfter(record models.RecordingRecord) time.Duration {
+	duration := time.Duration(record.ClipDurationMs) * time.Millisecond
+	return trimTimeout(duration) + time.Minute
+}
+
+func recordingTimestamp(value string) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
+}
+
+type rawFallback struct {
+	path string
+	size int64
+}
+
+func existingRawFallback(record models.RecordingRecord) (rawFallback, bool) {
+	rawPath := strings.TrimSpace(record.RawVideoPath)
+	if rawPath == "" || samePath(rawPath, record.VideoPath) {
+		return rawFallback{}, false
+	}
+	info, err := os.Stat(rawPath)
+	if err != nil || info.IsDir() {
+		return rawFallback{}, false
+	}
+	return rawFallback{path: rawPath, size: info.Size()}, true
+}
+
+func refreshAuxiliaryVideoSizes(record models.RecordingRecord, activePath string) models.RecordingRecord {
+	if path := strings.TrimSpace(record.RawVideoPath); path != "" && !samePath(path, activePath) {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			record.RawSizeBytes = info.Size()
+		} else {
+			record.RawSizeBytes = 0
+		}
+	}
+	if path := strings.TrimSpace(record.TrimmedVideoPath); path != "" && !samePath(path, activePath) {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			record.TrimmedSizeBytes = info.Size()
+		} else {
+			record.TrimmedSizeBytes = 0
+		}
+	}
+	return record
+}
+
+func syncActiveVideoSize(record models.RecordingRecord, activePath string, size int64) models.RecordingRecord {
+	if samePath(activePath, record.RawVideoPath) {
+		record.RawSizeBytes = size
+	}
+	if samePath(activePath, record.TrimmedVideoPath) {
+		record.TrimmedSizeBytes = size
+	}
+	return record
+}
+
+func recordingVideoPaths(record models.RecordingRecord) []string {
+	seen := map[string]bool{}
+	var paths []string
+	for _, path := range []string{record.VideoPath, record.RawVideoPath, record.TrimmedVideoPath} {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		key := path
+		if abs, err := filepath.Abs(path); err == nil {
+			key = strings.ToLower(abs)
+		} else {
+			key = strings.ToLower(path)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		paths = append(paths, path)
+	}
+	return paths
 }
 
 func findRecording(records []models.RecordingRecord, id string) (models.RecordingRecord, bool) {

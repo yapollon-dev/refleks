@@ -6,20 +6,40 @@ The automatic trigger is a completed `Stats.csv` import. Cancelled or restarted 
 
 RefleK's only links a recording to a run when OBS confirms that a new replay was saved for that recording attempt. If the app cannot confidently confirm a new replay, the save fails instead of linking an uncertain or older clip.
 
-## Current Recording Limitation
+## Exact Run Clipping
 
-RefleK's currently saves the full OBS replay-buffer output. It does not yet trim the video to the exact start and end of the Kovaak's scenario.
+RefleK's saves the OBS replay buffer first, then trims it to the verified Kovaak's run window when enough timing data is available.
 
-This means:
+For run-linked auto saves, RefleK's waits until the configured post-roll has elapsed before asking OBS to save the replay buffer. This is required because OBS cannot save footage that has not happened yet.
 
-* Short scenarios may include footage from before the run.
-* The saved clip length depends on the replay-buffer duration configured in OBS.
-* If a scenario is longer than the OBS replay buffer, the beginning of the run will not be available.
-* RefleK's cannot recover footage that has already left the OBS replay buffer.
+The clip window is:
 
-Configure the OBS replay buffer so it is longer than the longest scenario you expect to play, plus some additional time for the completed-run file to be detected and processed.
+* The completed scenario start.
+* The completed scenario end.
+* The configured pre-roll before the start.
+* The configured post-roll after the end.
 
-Exact scenario-length trimming will be added separately.
+The default pre-roll is 2 seconds. The default post-roll is 3 seconds. Both are configurable in Settings.
+
+RefleK's stores the timing source used for each recording. Current Kovaak's files normally provide `Challenge Start` as a time of day and the Stats filename as the completed run time. RefleK's maps those values onto the OBS replay file timeline using the OBS save request time and the probed replay duration.
+
+If exact boundaries cannot be established, RefleK's keeps the full replay and marks the trim failure in metadata. It does not label that recording as an exact run clip.
+
+If the replay buffer does not contain the full requested clip window, RefleK's trims the available portion and marks the recording as truncated. A truncated recording is not presented as a full exact clip.
+
+RefleK's requires `ffmpeg` and `ffprobe` to be available on `PATH` for trimming. If they are missing or trimming fails, the full replay remains linked and playable.
+
+Configure the OBS replay buffer so it is longer than:
+
+```text
+longest expected scenario
++ completed Stats.csv detection delay
++ delayed OBS replay-save confirmation/processing time
++ pre-roll
++ post-roll
+```
+
+RefleK's cannot recover footage that has already left the OBS replay buffer.
 
 ## OBS Setup
 
@@ -54,6 +74,14 @@ $HOME/.refleks/recordings.json
 ```
 
 If the recording folder is on another drive, RefleK's copies the saved replay into the configured folder when a direct move is not possible.
+
+For run-linked recordings, metadata distinguishes:
+
+* The OBS source replay path.
+* The copied full replay in the RefleK's recording folder.
+* The trimmed clip when trimming succeeds.
+
+After a successful trim, RefleK's deletes the OBS source replay. Settings decide whether the copied full replay is also kept or deleted. The in-app player uses the trimmed clip when available and falls back to the full replay when trimming failed or has not completed.
 
 ## Save Policies
 
@@ -144,14 +172,23 @@ A recording fails without linking a video when:
 
 Correct run-to-recording linking takes priority over saving a clip when the result is uncertain.
 
+A recording can still be saved as a full replay with a trim warning when:
+
+* Kovaak's timing fields are missing or ambiguous.
+* `ffmpeg` or `ffprobe` is unavailable.
+* Trimming fails validation.
+
+In those cases, the recording remains linked to the run but is not presented as an exact trimmed clip.
+
 ## Troubleshooting
 
 * **Authentication failed:** Verify the OBS WebSocket password in Settings.
 * **Connection failed or was lost:** Start OBS, enable the WebSocket server and verify the host and port.
 * **Replay buffer inactive:** Start it manually or enable Auto-start Replay Buffer.
 * **OBS did not confirm a new replay:** Confirm that replay-buffer saving works directly inside OBS.
-* **Recording is missing the beginning:** Increase the OBS replay-buffer duration.
-* **Recording contains footage before the scenario:** This is expected until exact scenario-length trimming is added.
+* **Recording is marked truncated:** Increase the OBS replay-buffer duration so it includes the full scenario, detection delay, pre-roll and post-roll.
+* **Recording saved as full replay; trim failed:** Install or repair `ffmpeg`/`ffprobe`, then check the recording error text.
+* **Recording contains footage before the scenario:** Confirm trimming succeeded. If trimming failed, RefleK's plays the full replay fallback.
 * **Saved replay file is missing:** Check the OBS output folder, configured RefleK's recording folder, permissions and antivirus rules.
 * **Insufficient disk space:** Free disk space, lower the minimum free-space setting, or run cleanup.
 * **Storage limit exceeded:** Increase the storage limit, enable automatic cleanup, or delete older unprotected recordings.

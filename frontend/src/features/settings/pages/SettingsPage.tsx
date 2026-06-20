@@ -647,6 +647,29 @@ export function SettingsPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsField label="Pre-roll (seconds)" description="Extra replay kept before the verified scenario start.">
+                    <Input
+                      type="number"
+                      value={recording.preRollSeconds}
+                      onChange={e => updateRecordingField('preRollSeconds', parseInt(e.target.value, 10) || recording.preRollSeconds)}
+                      onKeyDown={handleInputKeyDown}
+                      min={1}
+                      className="w-24 text-center"
+                    />
+                  </SettingsField>
+                  <SettingsField label="Post-roll (seconds)" description="Extra replay kept after the verified scenario end.">
+                    <Input
+                      type="number"
+                      value={recording.postRollSeconds}
+                      onChange={e => updateRecordingField('postRollSeconds', parseInt(e.target.value, 10) || recording.postRollSeconds)}
+                      onKeyDown={handleInputKeyDown}
+                      min={1}
+                      className="w-24 text-center"
+                    />
+                  </SettingsField>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
                   <SettingsField label="Auto Connect" description="Connect to OBS automatically so the replay buffer can be kept ready." checkbox>
                     <Checkbox
                       checked={!!recording.autoConnect}
@@ -665,6 +688,13 @@ export function SettingsPage() {
                   <Checkbox
                     checked={!!recording.autoCleanup}
                     onCheckedChange={v => updateRecordingField('autoCleanup', v === true, true)}
+                  />
+                </SettingsField>
+
+                <SettingsField label="Keep Full Replay After Trim" description="When disabled, successful trims delete the copied full replay and the OBS source replay." checkbox>
+                  <Checkbox
+                    checked={!!recording.keepRawReplay}
+                    onCheckedChange={v => updateRecordingField('keepRawReplay', v === true, true)}
                   />
                 </SettingsField>
               </SettingsSection>

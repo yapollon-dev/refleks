@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -62,6 +63,10 @@ func (a *App) startup(ctx context.Context) {
 	a.updaterSvc = updater.NewService(constants.GitHubOwner, constants.GitHubRepo, constants.AppVersion)
 	if svc, err := recording.NewService(a.settingsSvc, a.runStore); err == nil {
 		a.recordingSvc = svc
+		a.recordingSvc.SetOnChanged(func() {
+			a.emitRecordingsChanged()
+			a.emitRecordingStatusChanged()
+		})
 	} else {
 		runtime.LogWarning(a.ctx, "recording service init failed: "+err.Error())
 	}
@@ -372,6 +377,19 @@ func (a *App) RevealRecording(id string) error {
 		return fmt.Errorf("recording service is not initialized")
 	}
 	return a.recordingSvc.RevealRecording(id)
+}
+
+func (a *App) serveRecordingVideo(w http.ResponseWriter, r *http.Request, id string) {
+	if a.recordingSvc == nil {
+		http.Error(w, "recording service is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	path, err := a.recordingSvc.VideoPath(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, path)
 }
 
 // SetRecordingProtected updates the cleanup protection flag for a recording.
