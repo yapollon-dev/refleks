@@ -27,7 +27,7 @@ import {
   ResetSettings as _ResetSettings,
   RevealRecording as _RevealRecording,
   RunRecordingCleanup as _RunRecordingCleanup,
-  SaveReplayForLatestRun as _SaveReplayForLatestRun,
+  SaveCurrentReplay as _SaveCurrentReplay,
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
   SelectRecordingDirectory as _SelectRecordingDirectory,
@@ -154,8 +154,8 @@ export async function selectRecordingDirectory(): Promise<string> {
   return String(res || '')
 }
 
-export async function saveReplayForLatestRun(): Promise<RecordingRecord> {
-  const res = await _SaveReplayForLatestRun()
+export async function saveCurrentReplay(runId = ''): Promise<RecordingRecord> {
+  const res = await _SaveCurrentReplay(runId)
   return res as unknown as RecordingRecord
 }
 

@@ -291,12 +291,20 @@ func (a *App) TestRecordingConnection() models.RecordingRuntimeStatus {
 	return a.recordingSvc.TestConnection(a.ctx)
 }
 
-// SaveReplayForLatestRun manually saves the current OBS replay buffer for the latest completed run.
+// SaveCurrentReplay manually saves the current OBS replay buffer, optionally linked to an explicitly selected run.
+func (a *App) SaveCurrentReplay(runID string) (models.RecordingRecord, error) {
+	if a.recordingSvc == nil {
+		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
+	}
+	return a.recordingSvc.SaveCurrentReplay(a.ctx, runID)
+}
+
+// SaveReplayForLatestRun is kept for older generated clients; it now saves an unlinked manual replay.
 func (a *App) SaveReplayForLatestRun() (models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
 		return models.RecordingRecord{}, fmt.Errorf("recording service is not initialized")
 	}
-	return a.recordingSvc.SaveLatestRunReplay(a.ctx)
+	return a.recordingSvc.SaveCurrentReplay(a.ctx, "")
 }
 
 // GetRecordings returns persisted recording metadata.

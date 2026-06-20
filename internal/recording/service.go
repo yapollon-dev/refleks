@@ -169,22 +169,25 @@ func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.Recordin
 	return status
 }
 
-func (s *Service) SaveLatestRunReplay(ctx context.Context) (models.RecordingRecord, error) {
-	if s == nil || s.runStore == nil {
-		return models.RecordingRecord{}, errors.New("run store is not initialized")
+func (s *Service) SaveCurrentReplay(ctx context.Context, runID string) (models.RecordingRecord, error) {
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return s.saveUnlinkedReplay(ctx)
 	}
-	recent, err := s.runStore.LoadRecentRuns(1)
+
+	rec, err := s.runByID(runID)
 	if err != nil {
 		return models.RecordingRecord{}, err
 	}
-	if len(recent) == 0 {
-		return models.RecordingRecord{}, errors.New("no completed runs are available")
-	}
-	return s.SaveRunReplay(ctx, recent[len(recent)-1])
+	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false, time.Time{}, models.RecordingLinkSourceManualSelected, false)
+}
+
+func (s *Service) SaveLatestRunReplay(ctx context.Context) (models.RecordingRecord, error) {
+	return s.SaveCurrentReplay(ctx, "")
 }
 
 func (s *Service) SaveRunReplay(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
-	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false, time.Time{})
+	return s.saveRunReplay(ctx, rec, models.RecordingKeepReasonManual, false, time.Time{}, models.RecordingLinkSourceManualSelected, false)
 }
 
 func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) (models.RecordingRecord, error) {
@@ -226,14 +229,14 @@ func (s *Service) HandleCompletedRun(ctx context.Context, rec models.RunRecord) 
 		}
 		return record, errors.New(record.LastError)
 	}
-	record, err := s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave, importedAt)
+	record, err := s.saveRunReplay(ctx, rec, decision.Reason, decision.PBAtSave, importedAt, models.RecordingLinkSourceAutoCompletedRun, true)
 	if errors.Is(err, errRecordingAlreadyExists) {
 		return record, nil
 	}
 	return record, err
 }
 
-func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) (models.RecordingRecord, error) {
+func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time, linkSource models.RecordingLinkSource, requireEnabled bool) (models.RecordingRecord, error) {
 	if s == nil || s.settingsSvc == nil || s.metadata == nil {
 		return models.RecordingRecord{}, errors.New("recording service is not initialized")
 	}
@@ -242,14 +245,14 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	defer s.saveMu.Unlock()
 
 	cfg := s.settingsSvc.Get().Recording
-	if !cfg.Enabled {
+	if requireEnabled && !cfg.Enabled {
 		return models.RecordingRecord{}, errors.New("recording is disabled")
 	}
 	if strings.TrimSpace(cfg.RecordingDir) == "" {
 		return models.RecordingRecord{}, errors.New("recording folder is not configured")
 	}
 
-	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt)
+	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt, linkSource)
 	if err != nil {
 		return record, err
 	}
@@ -258,7 +261,30 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 	}
 
 	rec = runs.EnsureRunID(rec)
+	return s.savePreparedRecordingLocked(ctx, cfg, record, rec.FileName, importedAt)
+}
 
+func (s *Service) saveUnlinkedReplay(ctx context.Context) (models.RecordingRecord, error) {
+	if s == nil || s.settingsSvc == nil || s.metadata == nil {
+		return models.RecordingRecord{}, errors.New("recording service is not initialized")
+	}
+
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	cfg := s.settingsSvc.Get().Recording
+	if strings.TrimSpace(cfg.RecordingDir) == "" {
+		return models.RecordingRecord{}, errors.New("recording folder is not configured")
+	}
+
+	record := newUnlinkedRecordingRecord()
+	if err := s.metadata.Upsert(record); err != nil {
+		return models.RecordingRecord{}, err
+	}
+	return s.savePreparedRecordingLocked(ctx, cfg, record, "manual-replay", time.Time{})
+}
+
+func (s *Service) savePreparedRecordingLocked(ctx context.Context, cfg models.RecordingSettings, record models.RecordingRecord, baseName string, importedAt time.Time) (models.RecordingRecord, error) {
 	fail := func(err error) (models.RecordingRecord, error) {
 		record.Status = models.RecordingStatusFailed
 		record.LastError = err.Error()
@@ -287,7 +313,7 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 		return fail(err)
 	}
 	if !readiness.ActiveBefore {
-		return fail(errors.New("OBS replay buffer was not active before this save; it was started for future saves, but this run cannot be safely linked"))
+		return fail(errors.New("OBS replay buffer was not active before this save; it was started for future saves, but this replay cannot be safely saved"))
 	}
 
 	saveResult, err := client.SaveReplayBuffer(obsCtx)
@@ -303,7 +329,7 @@ func (s *Service) saveRunReplay(ctx context.Context, rec models.RunRecord, reaso
 		return fail(err)
 	}
 
-	finalPath, size, err := moveRecordingFileWithCheck(saveResult.Path, cfg.RecordingDir, rec.FileName, func(size int64) error {
+	finalPath, size, err := moveRecordingFileWithCheck(saveResult.Path, cfg.RecordingDir, baseName, func(size int64) error {
 		return s.ensureStorageAllowsSave(cfg, size, record.ID)
 	})
 	if err != nil {
@@ -332,7 +358,7 @@ func (s *Service) upsertAutoAttemptStatus(rec models.RunRecord, reason models.Re
 	s.saveMu.Lock()
 	defer s.saveMu.Unlock()
 
-	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt)
+	record, err := s.prepareRecordingAttemptLocked(rec, reason, pbAtSave, importedAt, models.RecordingLinkSourceAutoCompletedRun)
 	if errors.Is(err, errRecordingAlreadyExists) {
 		return record, nil
 	}
@@ -349,7 +375,7 @@ func (s *Service) upsertAutoAttemptStatus(rec models.RunRecord, reason models.Re
 	return record, nil
 }
 
-func (s *Service) prepareRecordingAttemptLocked(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) (models.RecordingRecord, error) {
+func (s *Service) prepareRecordingAttemptLocked(rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time, linkSource models.RecordingLinkSource) (models.RecordingRecord, error) {
 	rec = runs.EnsureRunID(rec)
 	if existing, ok, err := s.recordingForRun(rec.RunID); err != nil {
 		return models.RecordingRecord{}, err
@@ -357,10 +383,11 @@ func (s *Service) prepareRecordingAttemptLocked(rec models.RunRecord, reason mod
 		if existing.Status == models.RecordingStatusSaved || existing.Status == models.RecordingStatusPending {
 			return existing, errRecordingAlreadyExists
 		}
-		return resetRecordingAttempt(existing, rec, reason, pbAtSave, importedAt), nil
+		return resetRecordingAttempt(existing, rec, reason, pbAtSave, importedAt, linkSource), nil
 	}
 
 	record := newRecordingRecord(rec, reason, pbAtSave)
+	record.LinkSource = linkSource
 	if !importedAt.IsZero() {
 		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
 	}
@@ -368,7 +395,7 @@ func (s *Service) prepareRecordingAttemptLocked(rec models.RunRecord, reason mod
 }
 
 // resetRecordingAttempt keeps the metadata identity for a retry while clearing stale save output.
-func resetRecordingAttempt(existing models.RecordingRecord, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time) models.RecordingRecord {
+func resetRecordingAttempt(existing models.RecordingRecord, rec models.RunRecord, reason models.RecordingKeepReason, pbAtSave bool, importedAt time.Time, linkSource models.RecordingLinkSource) models.RecordingRecord {
 	record := newRecordingRecord(rec, reason, pbAtSave)
 	record.ID = existing.ID
 	record.CreatedAt = existing.CreatedAt
@@ -376,6 +403,7 @@ func resetRecordingAttempt(existing models.RecordingRecord, rec models.RunRecord
 		record.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	record.Protected = existing.Protected
+	record.LinkSource = linkSource
 	if !importedAt.IsZero() {
 		record.RunImportedAt = importedAt.Format(time.RFC3339Nano)
 	}
@@ -563,6 +591,36 @@ func newRecordingRecord(rec models.RunRecord, reason models.RecordingKeepReason,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+}
+
+func newUnlinkedRecordingRecord() models.RecordingRecord {
+	now := time.Now().UTC().Format(time.RFC3339)
+	return models.RecordingRecord{
+		ID:         newRecordingID(),
+		Scenario:   "Unlinked replay",
+		KeepReason: models.RecordingKeepReasonManual,
+		LinkSource: models.RecordingLinkSourceUnlinked,
+		Status:     models.RecordingStatusPending,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+}
+
+func (s *Service) runByID(runID string) (models.RunRecord, error) {
+	if s == nil || s.runStore == nil {
+		return models.RunRecord{}, errors.New("run store is not initialized")
+	}
+	runsList, err := s.runStore.LoadAllRunSummaries()
+	if err != nil {
+		return models.RunRecord{}, err
+	}
+	for _, rec := range runsList {
+		rec = runs.EnsureRunID(rec)
+		if rec.RunID == runID {
+			return rec, nil
+		}
+	}
+	return models.RunRecord{}, fmt.Errorf("run %q was not found", runID)
 }
 
 func newRecordingID() string {

@@ -71,9 +71,7 @@ function formatRecordingLabel(value: string): string {
 
 function recordingMatchesRun(recording: RecordingRecord, run: HistoryRun): boolean {
   const runId = run.item.runId?.trim()
-  if (runId && recording.runId === runId) return true
-  if (run.item.filePath && recording.runFilePath === run.item.filePath) return true
-  return !!run.item.fileName && recording.runFileName === run.item.fileName
+  return !!runId && recording.runId === runId
 }
 
 function getCategorizedStats(run: HistoryRun): CategorizedStats {

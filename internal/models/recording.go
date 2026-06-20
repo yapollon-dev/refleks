@@ -3,6 +3,7 @@ package models
 type RecordingPolicy string
 type RecordingKeepReason string
 type RecordingStatus string
+type RecordingLinkSource string
 
 const (
 	RecordingPolicyEveryRun RecordingPolicy = "every_run"
@@ -23,6 +24,10 @@ const (
 	RecordingStatusFailed  RecordingStatus = "failed"
 	RecordingStatusMissing RecordingStatus = "missing"
 	RecordingStatusSkipped RecordingStatus = "skipped"
+
+	RecordingLinkSourceAutoCompletedRun RecordingLinkSource = "auto_completed_run"
+	RecordingLinkSourceManualSelected   RecordingLinkSource = "manual_user_selected"
+	RecordingLinkSourceUnlinked         RecordingLinkSource = "unlinked"
 )
 
 type RecordingSettings struct {
@@ -50,6 +55,7 @@ type RecordingRecord struct {
 	Score                    float64             `json:"score"`
 	PlayedAt                 string              `json:"playedAt,omitempty"`
 	KeepReason               RecordingKeepReason `json:"keepReason"`
+	LinkSource               RecordingLinkSource `json:"linkSource,omitempty"`
 	OBSSourcePath            string              `json:"obsSourcePath,omitempty"`
 	RunImportedAt            string              `json:"runImportedAt,omitempty"`
 	CaptureRequestedAt       string              `json:"captureRequestedAt,omitempty"`

@@ -114,6 +114,10 @@ export function RunRecordingCleanup() {
   return window['go']['main']['App']['RunRecordingCleanup']();
 }
 
+export function SaveCurrentReplay(arg1) {
+  return window['go']['main']['App']['SaveCurrentReplay'](arg1);
+}
+
 export function SaveReplayForLatestRun() {
   return window['go']['main']['App']['SaveReplayForLatestRun']();
 }

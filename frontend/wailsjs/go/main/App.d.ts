@@ -58,6 +58,8 @@ export function RevealRecording(arg1:string):Promise<void>;
 
 export function RunRecordingCleanup():Promise<models.RecordingCleanupPreview>;
 
+export function SaveCurrentReplay(arg1:string):Promise<models.RecordingRecord>;
+
 export function SaveReplayForLatestRun():Promise<models.RecordingRecord>;
 
 export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<void>;

@@ -186,6 +186,7 @@ export type RecordingKeepReason =
   | 'always_save_scenario'
   | 'never_save_scenario'
 export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing' | 'skipped'
+export type RecordingLinkSource = 'auto_completed_run' | 'manual_user_selected' | 'unlinked'
 
 export interface RecordingSettings {
   enabled: boolean
@@ -212,6 +213,7 @@ export interface RecordingRecord {
   score: number
   playedAt?: string
   keepReason: RecordingKeepReason
+  linkSource?: RecordingLinkSource
   obsSourcePath?: string
   runImportedAt?: string
   captureRequestedAt?: string

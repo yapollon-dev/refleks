@@ -9,6 +9,7 @@ import {
 } from '@/shared/components'
 import {
   deleteRecording,
+  getRecentRuns,
   getRecordings,
   getRecordingStatus,
   openRecording,
@@ -16,17 +17,19 @@ import {
   refreshRecordingFiles,
   revealRecording,
   runRecordingCleanup,
-  saveReplayForLatestRun,
+  saveCurrentReplay,
   setRecordingProtected,
   testRecordingConnection,
 } from '@/shared/lib'
-import type { RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RecordingStatusValue } from '@/shared/types'
+import type { RecordingCleanupPreview, RecordingRecord, RecordingRuntimeStatus, RecordingStatusValue, RunRecord } from '@/shared/types'
 import { ExternalLink, FolderOpen, HardDrive, Lock, LockOpen, RefreshCw, Save, Search, Trash2, Video } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 type StatusFilter = 'all' | RecordingStatusValue
 type ProtectionFilter = 'all' | 'protected' | 'unprotected'
 type SortMode = 'newest' | 'oldest' | 'scenario' | 'status' | 'size_desc'
+
+const manualReplayUnlinkedValue = '__unlinked__'
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
@@ -42,6 +45,19 @@ function formatBytes(bytes: number): string {
 
 function formatLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function runScenario(run: RunRecord): string {
+  const scenario = run.stats?.['Scenario']
+  if (typeof scenario === 'string' && scenario.trim()) return scenario.trim()
+  if (run.fileName.includes(' - ')) return run.fileName.split(' - ')[0].trim()
+  return run.fileName || 'Unknown run'
+}
+
+function runDateLabel(run: RunRecord): string {
+  const raw = run.stats?.['Date Played']
+  const parsed = raw ? Date.parse(String(raw)) : 0
+  return Number.isFinite(parsed) && parsed > 0 ? new Date(parsed).toLocaleString() : 'No date'
 }
 
 function statusClass(status: RecordingStatusValue): string {
@@ -60,6 +76,8 @@ function sortTimestamp(value: string | undefined): number {
 export function RecordingsPage() {
   const [status, setStatus] = useState<RecordingRuntimeStatus | null>(null)
   const [recordings, setRecordings] = useState<RecordingRecord[]>([])
+  const [manualRuns, setManualRuns] = useState<RunRecord[]>([])
+  const [manualRunId, setManualRunId] = useState(manualReplayUnlinkedValue)
   const [cleanupPreview, setCleanupPreview] = useState<RecordingCleanupPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
@@ -84,6 +102,7 @@ export function RecordingsPage() {
       ])
       setStatus(nextStatus)
       setRecordings(nextRecordings)
+      setManualRuns(await getRecentRuns(20))
       setCleanupPreview(await previewRecordingCleanup())
     } catch (e) {
       setError((e as Error)?.message || 'Failed to load recordings')
@@ -109,6 +128,7 @@ export function RecordingsPage() {
         recording.runId,
         recording.videoPath,
         recording.keepReason,
+        recording.linkSource,
         recording.lastError,
       ].join(' ').toLowerCase()
       return haystack.includes(normalizedQuery)
@@ -135,14 +155,14 @@ export function RecordingsPage() {
     }
   }
 
-  const handleSaveLatest = async () => {
+  const handleSaveCurrentReplay = async () => {
     setSaving(true)
     setError('')
     try {
-      await saveReplayForLatestRun()
+      await saveCurrentReplay(manualRunId === manualReplayUnlinkedValue ? '' : manualRunId)
       await load()
     } catch (e) {
-      setError((e as Error)?.message || 'Failed to save latest replay')
+      setError((e as Error)?.message || 'Failed to save current replay')
       try {
         setRecordings(await getRecordings())
       } catch {
@@ -273,8 +293,21 @@ export function RecordingsPage() {
             <p className="text-xs text-surface-muted-foreground">OBS replay metadata, connection status, and local file actions.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void handleSaveLatest()} disabled={saving} variant="default" size="sm">
-              {saving ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-1.5 h-4 w-4" />Save Latest Run Replay</>}
+            <Select value={manualRunId} onValueChange={setManualRunId}>
+              <SelectTrigger className="w-[18rem] max-w-full" title="Manual replay link target">
+                <SelectValue placeholder="Manual save target" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={manualReplayUnlinkedValue}>Unlinked recording</SelectItem>
+                {manualRuns.filter(run => !!run.runId).map(run => (
+                  <SelectItem key={run.runId} value={run.runId as string}>
+                    {runScenario(run)} · {runDateLabel(run)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={() => void handleSaveCurrentReplay()} disabled={saving} variant="default" size="sm">
+              {saving ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-1.5 h-4 w-4" />Save Current Replay</>}
             </Button>
             <Button onClick={() => void handleRefreshFiles()} disabled={refreshingFiles} variant="outline" size="sm">
               {refreshingFiles ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : null}
@@ -472,7 +505,7 @@ export function RecordingsPage() {
             <Video className="mx-auto h-8 w-8 text-surface-muted-foreground" />
             <h2 className="mt-3 text-sm font-medium text-foreground">No recordings yet</h2>
             <p className="mx-auto mt-1 max-w-xl text-xs text-surface-muted-foreground">
-              Use Save Latest Run Replay to save the current OBS replay buffer for the latest completed run.
+              Use Save Current Replay to save the current OBS replay buffer. It stays unlinked unless you select a run first.
             </p>
           </div>
         ) : visibleRecordings.length === 0 ? (
@@ -497,8 +530,8 @@ export function RecordingsPage() {
                 return (
                   <div key={recording.id} className="grid gap-3 px-5 py-4 xl:grid-cols-[1.2fr_0.45fr_0.65fr_0.55fr_1.25fr_0.85fr]">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-foreground">{recording.scenario || recording.runFileName || 'Unknown run'}</div>
-                      <div className="mt-1 truncate text-xs text-surface-muted-foreground">{recording.playedAt || recording.runId}</div>
+                      <div className="truncate text-sm font-medium text-foreground">{recording.scenario || recording.runFileName || 'Unlinked recording'}</div>
+                      <div className="mt-1 truncate text-xs text-surface-muted-foreground">{recording.playedAt || recording.runId || formatLabel(recording.linkSource || 'unlinked')}</div>
                       {recording.protected && (
                         <div className="mt-2 inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
                           <Lock className="mr-1 h-3 w-3" />Protected

@@ -104,7 +104,7 @@ func TestSaveRunReplayRecordsCaptureTimingMetadata(t *testing.T) {
 	run := recordingRunFixture()
 	importedAt := time.Now().UTC().Add(-100 * time.Millisecond)
 
-	record, err := service.saveRunReplay(context.Background(), run, models.RecordingKeepReasonEveryRun, false, importedAt)
+	record, err := service.saveRunReplay(context.Background(), run, models.RecordingKeepReasonEveryRun, false, importedAt, models.RecordingLinkSourceAutoCompletedRun, true)
 	if err != nil {
 		t.Fatalf("save replay: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSaveRunReplayFailsWhenReplayBufferWasInactiveAtSaveTime(t *testing.T) {
 	cfg.RecordingDir = t.TempDir()
 	service := newStorageTestService(t, cfg)
 
-	record, err := service.saveRunReplay(context.Background(), recordingRunFixture(), models.RecordingKeepReasonEveryRun, false, time.Now().UTC())
+	record, err := service.saveRunReplay(context.Background(), recordingRunFixture(), models.RecordingKeepReasonEveryRun, false, time.Now().UTC(), models.RecordingLinkSourceAutoCompletedRun, true)
 	if err == nil {
 		t.Fatalf("save should fail when replay buffer was inactive")
 	}
@@ -178,7 +178,7 @@ func TestSaveRunReplayRetriesFailedRecordInPlace(t *testing.T) {
 		t.Fatalf("save existing failed recording: %v", err)
 	}
 
-	record, err := service.saveRunReplay(context.Background(), run, models.RecordingKeepReasonEveryRun, false, time.Now().UTC())
+	record, err := service.saveRunReplay(context.Background(), run, models.RecordingKeepReasonEveryRun, false, time.Now().UTC(), models.RecordingLinkSourceAutoCompletedRun, true)
 	if err != nil {
 		t.Fatalf("retry save replay: %v", err)
 	}
@@ -197,6 +197,92 @@ func TestSaveRunReplayRetriesFailedRecordInPlace(t *testing.T) {
 	}
 	if len(records) != 1 || records[0].ID != existing.ID {
 		t.Fatalf("retry should update one metadata row, got %#v", records)
+	}
+}
+
+func TestSaveCurrentReplayDefaultsToUnlinkedAndIgnoresAutoEnabled(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "manual unlinked.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = true
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = false
+	cfg.AutoStartReplayBuffer = true
+	cfg.RecordingDir = t.TempDir()
+	service := newStorageTestService(t, cfg)
+
+	record, err := service.SaveCurrentReplay(context.Background(), "")
+	if err != nil {
+		t.Fatalf("save unlinked replay: %v", err)
+	}
+	if record.Status != models.RecordingStatusSaved {
+		t.Fatalf("status = %q, want saved", record.Status)
+	}
+	if record.RunID != "" || record.RunFileName != "" || record.LinkSource != models.RecordingLinkSourceUnlinked {
+		t.Fatalf("manual save should be unlinked by default: %#v", record)
+	}
+	if record.KeepReason != models.RecordingKeepReasonManual {
+		t.Fatalf("keep reason = %q, want manual_save", record.KeepReason)
+	}
+	if record.VideoPath == "" {
+		t.Fatalf("manual replay should have final video path")
+	}
+}
+
+func TestSaveCurrentReplayLinksOnlyExplicitSelectedRun(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "manual linked.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = true
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = false
+	cfg.AutoStartReplayBuffer = true
+	cfg.RecordingDir = t.TempDir()
+	service := newStorageTestService(t, cfg)
+	run := recordingRunFixture()
+	runPath, err := service.runStore.Save(runs.RunRecord{
+		FileName: run.FileName,
+		Stats:    run.Stats,
+	})
+	if err != nil {
+		t.Fatalf("save run fixture: %v", err)
+	}
+
+	record, err := service.SaveCurrentReplay(context.Background(), run.RunID)
+	if err != nil {
+		t.Fatalf("save linked replay: %v", err)
+	}
+	if record.RunID != run.RunID || record.RunFilePath != runPath {
+		t.Fatalf("manual selected save should link selected run: %#v", record)
+	}
+	if record.LinkSource != models.RecordingLinkSourceManualSelected {
+		t.Fatalf("link source = %q, want manual_user_selected", record.LinkSource)
+	}
+}
+
+func TestSaveLatestRunReplayCompatibilitySavesUnlinked(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "compat unlinked.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayActive = true
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+	})
+	cfg := fake.settings(t, "")
+	cfg.Enabled = false
+	cfg.AutoStartReplayBuffer = true
+	cfg.RecordingDir = t.TempDir()
+	service := newStorageTestService(t, cfg)
+
+	record, err := service.SaveLatestRunReplay(context.Background())
+	if err != nil {
+		t.Fatalf("compat save replay: %v", err)
+	}
+	if record.RunID != "" || record.LinkSource != models.RecordingLinkSourceUnlinked {
+		t.Fatalf("compat latest API should not infer a run link: %#v", record)
 	}
 }
 

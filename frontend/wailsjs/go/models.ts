@@ -458,6 +458,7 @@ export namespace models {
 	    score: number;
 	    playedAt?: string;
 	    keepReason: string;
+	    linkSource?: string;
 	    obsSourcePath?: string;
 	    runImportedAt?: string;
 	    captureRequestedAt?: string;
@@ -488,6 +489,7 @@ export namespace models {
 	        this.score = source["score"];
 	        this.playedAt = source["playedAt"];
 	        this.keepReason = source["keepReason"];
+	        this.linkSource = source["linkSource"];
 	        this.obsSourcePath = source["obsSourcePath"];
 	        this.runImportedAt = source["runImportedAt"];
 	        this.captureRequestedAt = source["captureRequestedAt"];
