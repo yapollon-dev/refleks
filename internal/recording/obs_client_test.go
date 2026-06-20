@@ -23,15 +23,17 @@ import (
 )
 
 type fakeOBSServer struct {
-	server          *httptest.Server
-	password        string
-	salt            string
-	challenge       string
-	replayActive    bool
-	requestError    bool
-	closeAfterHello bool
-	replayPath      string
-	noReplayEvent   bool
+	server                   *httptest.Server
+	password                 string
+	salt                     string
+	challenge                string
+	replayActive             bool
+	requestError             bool
+	closeAfterHello          bool
+	replayPath               string
+	noReplayEvent            bool
+	replayEventAfterResponse bool
+	writeReplayOnSave        bool
 }
 
 func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServer {
@@ -103,6 +105,7 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 					Code:   100,
 				},
 			}
+			var pendingEvent *obsEventData
 			if fake.requestError {
 				response.RequestStatus = obsRequestStatus{Result: false, Code: 500, Comment: "boom"}
 			} else {
@@ -119,6 +122,11 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 				case "StartReplayBuffer":
 					fake.replayActive = true
 				case "SaveReplayBuffer":
+					if fake.replayPath != "" && fake.writeReplayOnSave {
+						if err := os.WriteFile(fake.replayPath, []byte("clip"), 0o644); err != nil {
+							return
+						}
+					}
 					if fake.replayPath != "" && !fake.noReplayEvent {
 						event := obsEventData{
 							EventType: "ReplayBufferSaved",
@@ -126,8 +134,12 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 								"savedReplayPath": mustJSON(fake.replayPath),
 							},
 						}
-						if err := conn.WriteJSON(obsMessage{Op: 5, Data: mustJSON(event)}); err != nil {
-							return
+						if fake.replayEventAfterResponse {
+							pendingEvent = &event
+						} else {
+							if err := conn.WriteJSON(obsMessage{Op: 5, Data: mustJSON(event)}); err != nil {
+								return
+							}
 						}
 					}
 				case "GetLastReplayBufferReplay":
@@ -140,6 +152,11 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 			}
 			if err := conn.WriteJSON(obsMessage{Op: 7, Data: mustJSON(response)}); err != nil {
 				return
+			}
+			if pendingEvent != nil {
+				if err := conn.WriteJSON(obsMessage{Op: 5, Data: mustJSON(*pendingEvent)}); err != nil {
+					return
+				}
 			}
 		}
 	}))
@@ -251,11 +268,9 @@ func TestOBSClientConnectionLoss(t *testing.T) {
 
 func TestOBSClientSaveReplayBufferUsesSavedEvent(t *testing.T) {
 	replayPath := filepath.Join(t.TempDir(), "event replay.mp4")
-	if err := os.WriteFile(replayPath, []byte("clip"), 0o644); err != nil {
-		t.Fatalf("write replay fixture: %v", err)
-	}
 	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
 		f.replayPath = replayPath
+		f.writeReplayOnSave = true
 	})
 	client := NewOBSClient(fake.settings(t, ""))
 	if err := client.Connect(context.Background()); err != nil {
@@ -272,10 +287,32 @@ func TestOBSClientSaveReplayBufferUsesSavedEvent(t *testing.T) {
 	}
 }
 
-func TestOBSClientSaveReplayBufferFallsBackToLastReplay(t *testing.T) {
-	oldTimeout := obsReplaySavedFallbackTimeout
-	obsReplaySavedFallbackTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { obsReplaySavedFallbackTimeout = oldTimeout })
+func TestOBSClientSaveReplayBufferUsesSavedEventAfterResponse(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "delayed event replay.mp4")
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayPath = replayPath
+		f.writeReplayOnSave = true
+		f.replayEventAfterResponse = true
+	})
+	client := NewOBSClient(fake.settings(t, ""))
+	if err := client.Connect(context.Background()); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	defer client.Close()
+
+	got, err := client.SaveReplayBuffer(context.Background())
+	if err != nil {
+		t.Fatalf("SaveReplayBuffer failed: %v", err)
+	}
+	if got != replayPath {
+		t.Fatalf("saved path = %q, want %q", got, replayPath)
+	}
+}
+
+func TestOBSClientSaveReplayBufferDoesNotFallBackToLastReplay(t *testing.T) {
+	oldTimeout := obsReplaySavedEventTimeout
+	obsReplaySavedEventTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { obsReplaySavedEventTimeout = oldTimeout })
 
 	replayPath := filepath.Join(t.TempDir(), "fallback replay.mp4")
 	if err := os.WriteFile(replayPath, []byte("clip"), 0o644); err != nil {
@@ -291,12 +328,42 @@ func TestOBSClientSaveReplayBufferFallsBackToLastReplay(t *testing.T) {
 	}
 	defer client.Close()
 
-	got, err := client.SaveReplayBuffer(context.Background())
-	if err != nil {
-		t.Fatalf("SaveReplayBuffer fallback failed: %v", err)
+	if got, err := client.SaveReplayBuffer(context.Background()); err == nil {
+		t.Fatalf("SaveReplayBuffer should not fall back to last replay, got %q", got)
 	}
-	if got != replayPath {
-		t.Fatalf("saved path = %q, want %q", got, replayPath)
+}
+
+func TestOBSClientSaveReplayBufferRejectsStaleSavedEvent(t *testing.T) {
+	oldTimeout := obsReplaySavedEventTimeout
+	obsReplaySavedEventTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { obsReplaySavedEventTimeout = oldTimeout })
+
+	replayPath := filepath.Join(t.TempDir(), "stale replay.mp4")
+	if err := os.WriteFile(replayPath, []byte("old clip"), 0o644); err != nil {
+		t.Fatalf("write replay fixture: %v", err)
+	}
+	staleTime := time.Now().Add(-1 * time.Hour)
+	if err := os.Chtimes(replayPath, staleTime, staleTime); err != nil {
+		t.Fatalf("make replay stale: %v", err)
+	}
+	fake := newFakeOBSServer(t, func(f *fakeOBSServer) {
+		f.replayPath = replayPath
+	})
+	client := NewOBSClient(fake.settings(t, ""))
+	if err := client.Connect(context.Background()); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	defer client.Close()
+
+	err := func() error {
+		_, err := client.SaveReplayBuffer(context.Background())
+		return err
+	}()
+	if err == nil {
+		t.Fatalf("SaveReplayBuffer should reject stale saved event")
+	}
+	if !strings.Contains(err.Error(), "not a fresh file") {
+		t.Fatalf("error should explain stale replay rejection, got %v", err)
 	}
 }
 

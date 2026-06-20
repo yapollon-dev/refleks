@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -20,7 +21,7 @@ import (
 
 const obsWebSocketSubprotocol = "obswebsocket.json"
 
-var obsReplaySavedFallbackTimeout = 8 * time.Second
+var obsReplaySavedEventTimeout = 8 * time.Second
 
 type OBSVersionInfo struct {
 	OBSVersion          string
@@ -143,46 +144,97 @@ func (c *OBSClient) StartReplayBuffer(ctx context.Context) error {
 }
 
 func (c *OBSClient) SaveReplayBuffer(ctx context.Context) (string, error) {
-	var savedPath string
-	eventHandler := func(msg obsMessage) {
-		if path := replaySavedPathFromEvent(msg); path != "" {
-			savedPath = path
-		}
+	if c == nil || c.conn == nil {
+		return "", errors.New("OBS client is not connected")
 	}
 
-	if _, err := c.requestWithEvents(ctx, "SaveReplayBuffer", nil, eventHandler); err != nil {
+	requestStarted := time.Now().UTC()
+	waitCtx, cancel := context.WithTimeout(ctx, obsReplaySavedEventTimeout)
+	defer cancel()
+
+	requestID := strconv.FormatUint(c.requestID.Add(1), 10)
+	req := obsRequestData{
+		RequestType: "SaveReplayBuffer",
+		RequestID:   requestID,
+	}
+	if err := c.writeMessage(waitCtx, obsMessage{Op: 6, Data: mustJSON(req)}); err != nil {
 		return "", err
 	}
-	if savedPath != "" {
-		return savedPath, nil
-	}
 
-	deadline := time.Now().Add(obsReplaySavedFallbackTimeout)
+	var (
+		responseOK   bool
+		freshPath    string
+		lastPathErr  error
+		sawSavedPath bool
+	)
 	for {
-		data, err := c.requestWithEvents(ctx, "GetLastReplayBufferReplay", nil, eventHandler)
-		if savedPath != "" {
-			return savedPath, nil
-		}
-		if err == nil {
-			if path := replayPathFromData(data); path != "" {
-				return path, nil
+		msg, err := c.readMessage(waitCtx)
+		if err != nil {
+			if waitCtx.Err() != nil {
+				if lastPathErr != nil {
+					return "", fmt.Errorf("OBS reported a replay path that was not a fresh file: %w", lastPathErr)
+				}
+				if sawSavedPath {
+					return "", errors.New("OBS did not confirm a fresh replay path after SaveReplayBuffer")
+				}
+				return "", errors.New("OBS did not report ReplayBufferSaved after SaveReplayBuffer")
 			}
-		}
-		if time.Now().After(deadline) {
-			if err != nil {
-				return "", err
-			}
-			return "", errors.New("OBS did not report a saved replay path")
+			return "", err
 		}
 
-		timer := time.NewTimer(200 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return "", ctx.Err()
-		case <-timer.C:
+		if msg.Op == 5 {
+			if path := replaySavedPathFromEvent(msg); path != "" {
+				sawSavedPath = true
+				if err := validateFreshReplayPath(path, requestStarted); err != nil {
+					lastPathErr = err
+					continue
+				}
+				freshPath = path
+				if responseOK {
+					return freshPath, nil
+				}
+			}
+			continue
+		}
+		if msg.Op != 7 {
+			continue
+		}
+
+		var response obsRequestResponseData
+		if err := json.Unmarshal(msg.Data, &response); err != nil {
+			return "", err
+		}
+		if response.RequestID != requestID {
+			continue
+		}
+		if !response.RequestStatus.Result {
+			if response.RequestStatus.Comment != "" {
+				return "", fmt.Errorf("OBS request SaveReplayBuffer failed: %s", response.RequestStatus.Comment)
+			}
+			return "", fmt.Errorf("OBS request SaveReplayBuffer failed with code %d", response.RequestStatus.Code)
+		}
+		responseOK = true
+		if freshPath != "" {
+			return freshPath, nil
 		}
 	}
+}
+
+func validateFreshReplayPath(path string, requestStarted time.Time) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("OBS reported an empty replay path")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("OBS reported saved replay path %q but it is not available: %w", path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("OBS reported saved replay path %q but it is a directory", path)
+	}
+	if info.ModTime().Before(requestStarted) {
+		return fmt.Errorf("OBS reported stale replay path %q modified before SaveReplayBuffer request", path)
+	}
+	return nil
 }
 
 func (c *OBSClient) request(ctx context.Context, requestType string, requestData any) (map[string]json.RawMessage, error) {
