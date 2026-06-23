@@ -25,6 +25,8 @@ const (
 	ffmpegSourceCustom  = "custom"
 	ffmpegSourceBundled = "bundled"
 	ffmpegSourcePath    = "path"
+
+	ffmpegCapabilityCacheVersion = "trim-encoder-v2"
 )
 
 type ffmpegInspection struct {
@@ -250,6 +252,7 @@ func ffmpegCandidateCacheKey(candidate ffmpegCandidate) (string, error) {
 		return "", fmt.Errorf("%s ffmpeg path points to a directory", candidate.source)
 	}
 	return strings.Join([]string{
+		ffmpegCapabilityCacheVersion,
 		candidate.source,
 		filepath.Clean(candidate.ffmpeg),
 		fmt.Sprint(ffmpegInfo.Size()),
@@ -286,12 +289,21 @@ func validateFFmpegCandidate(candidate ffmpegCandidate) ffmpegInspection {
 	inspection.FFmpegVersion = ffmpegVersion
 	inspection.FFprobeVersion = ffprobeVersion
 
-	if err := validateFFmpegCapabilities(ctx, toolchain); err != nil {
+	toolchain, err = validateFFmpegCapabilities(ctx, toolchain)
+	if err != nil {
 		inspection.Error = "ffmpeg capability check failed: " + err.Error()
 		return inspection
 	}
+	inspection.Toolchain = toolchain
 	inspection.Status = ffmpegStatusWorking
-	inspection.Capabilities = "mp4_input,ffprobe_duration,libx264,aac,optional_audio_map,faststart"
+	inspection.Capabilities = strings.Join([]string{
+		"mp4_input",
+		"ffprobe_duration",
+		"trim_encoder:" + toolchain.TrimVideoEncoder,
+		"aac",
+		"optional_audio_map",
+		"faststart",
+	}, ",")
 	inspection.Error = ""
 	return inspection
 }
@@ -317,15 +329,14 @@ func videoToolVersion(ctx context.Context, path string) (string, error) {
 }
 
 // validateFFmpegCapabilities runs a tiny end-to-end encode and trim so status reflects the current trimming pipeline.
-func validateFFmpegCapabilities(ctx context.Context, toolchain videoToolchain) error {
+func validateFFmpegCapabilities(ctx context.Context, toolchain videoToolchain) (videoToolchain, error) {
 	dir, err := os.MkdirTemp("", "refleks-ffmpeg-check-*")
 	if err != nil {
-		return err
+		return toolchain, err
 	}
 	defer os.RemoveAll(dir)
 
 	source := filepath.Join(dir, "source.mp4")
-	trimmed := filepath.Join(dir, "trimmed.mp4")
 	if err := runVideoCommand(ctx, toolchain.FFmpeg,
 		"-y",
 		"-hide_banner",
@@ -337,44 +348,69 @@ func validateFFmpegCapabilities(ctx context.Context, toolchain videoToolchain) e
 		"-t", "0.3",
 		"-map", "0:v:0",
 		"-map", "1:a:0",
-		"-c:v", "libx264",
-		"-preset", "ultrafast",
-		"-crf", "35",
+		"-c:v", "mpeg4",
+		"-q:v", "5",
 		"-c:a", "aac",
 		"-movflags", "+faststart",
 		source,
 	); err != nil {
-		return fmt.Errorf("sample MP4 encode failed: %w", err)
+		return toolchain, fmt.Errorf("sample MP4 encode failed: %w", err)
 	}
 	if _, err := defaultProbeVideoDuration(ctx, toolchain, source); err != nil {
-		return fmt.Errorf("sample duration probe failed: %w", err)
+		return toolchain, fmt.Errorf("sample duration probe failed: %w", err)
 	}
-	if err := runVideoCommand(ctx, toolchain.FFmpeg,
-		"-y",
-		"-hide_banner",
-		"-loglevel", "error",
-		"-ss", "0",
-		"-i", source,
-		"-t", "0.1",
-		"-map", "0:v:0",
-		"-map", "0:a?",
-		"-c:v", "libx264",
-		"-preset", "ultrafast",
-		"-crf", "35",
-		"-c:a", "aac",
-		"-movflags", "+faststart",
-		trimmed,
-	); err != nil {
-		return fmt.Errorf("sample trim failed: %w", err)
-	}
-	info, err := os.Stat(trimmed)
+	toolchain, err = selectTrimEncoder(ctx, toolchain, source, dir)
 	if err != nil {
-		return fmt.Errorf("sample trimmed MP4 is missing: %w", err)
+		return toolchain, err
 	}
-	if info.Size() <= 0 {
-		return errors.New("sample trimmed MP4 is empty")
+	return toolchain, nil
+}
+
+// selectTrimEncoder tries each exact H.264 trim encoder against a tiny sample so unsupported hardware paths are skipped.
+func selectTrimEncoder(ctx context.Context, toolchain videoToolchain, source string, dir string) (videoToolchain, error) {
+	var failures []string
+	for _, encoder := range trimEncoderConfigs() {
+		trimmed := filepath.Join(dir, "trimmed-"+encoder.Name+".mp4")
+		args := []string{
+			"-y",
+			"-hide_banner",
+			"-loglevel", "error",
+			"-ss", "0",
+			"-i", source,
+			"-t", "0.1",
+			"-map", "0:v:0",
+			"-map", "0:a?",
+		}
+		args = append(args, encoder.Args...)
+		args = append(args, "-c:a", "aac", "-movflags", "+faststart", trimmed)
+		if err := runVideoCommand(ctx, toolchain.FFmpeg, args...); err != nil {
+			failures = append(failures, encoder.Name+": "+err.Error())
+			_ = os.Remove(trimmed)
+			continue
+		}
+		info, err := os.Stat(trimmed)
+		if err != nil {
+			failures = append(failures, encoder.Name+": sample trimmed MP4 is missing")
+			continue
+		}
+		if info.Size() <= 0 {
+			failures = append(failures, encoder.Name+": sample trimmed MP4 is empty")
+			_ = os.Remove(trimmed)
+			continue
+		}
+		if _, err := defaultProbeVideoDuration(ctx, toolchain, trimmed); err != nil {
+			failures = append(failures, encoder.Name+": sample trimmed duration probe failed: "+err.Error())
+			_ = os.Remove(trimmed)
+			continue
+		}
+		toolchain.TrimVideoEncoder = encoder.Name
+		toolchain.TrimEncoderLabel = encoder.Label
+		return toolchain, nil
 	}
-	return nil
+	if len(failures) == 0 {
+		return toolchain, errors.New("no trim encoders were tested")
+	}
+	return toolchain, errors.New("no usable H.264 trim encoder found: " + strings.Join(failures, "; "))
 }
 
 func runVideoCommand(ctx context.Context, executable string, args ...string) error {

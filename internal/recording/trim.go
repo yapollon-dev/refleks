@@ -13,9 +13,11 @@ import (
 )
 
 type videoToolchain struct {
-	FFmpeg  string
-	FFprobe string
-	Source  string
+	FFmpeg           string
+	FFprobe          string
+	Source           string
+	TrimVideoEncoder string
+	TrimEncoderLabel string
 }
 
 var (
@@ -61,6 +63,7 @@ func defaultTrimReplayVideo(ctx context.Context, toolchain videoToolchain, sourc
 	ctx, cancel := context.WithTimeout(ctx, trimTimeout(plan.Duration))
 	defer cancel()
 
+	encoder := trimEncoderConfigFor(toolchain.TrimVideoEncoder)
 	cmd := exec.CommandContext(ctx, toolchain.FFmpeg,
 		"-y",
 		"-hide_banner",
@@ -70,9 +73,9 @@ func defaultTrimReplayVideo(ctx context.Context, toolchain videoToolchain, sourc
 		"-t", formatFFmpegSeconds(plan.Duration),
 		"-map", "0:v:0",
 		"-map", "0:a?",
-		"-c:v", "libx264",
-		"-preset", "veryfast",
-		"-crf", "18",
+	)
+	cmd.Args = append(cmd.Args, encoder.Args...)
+	cmd.Args = append(cmd.Args,
 		"-c:a", "aac",
 		"-movflags", "+faststart",
 		targetPath,
@@ -107,6 +110,55 @@ func defaultTrimReplayVideo(ctx context.Context, toolchain videoToolchain, sourc
 		return 0, 0, errors.New("trimmed replay duration is invalid")
 	}
 	return info.Size(), duration, nil
+}
+
+type trimEncoderConfig struct {
+	Name  string
+	Label string
+	Args  []string
+}
+
+// trimEncoderConfigs orders encoders by expected speed while keeping exact frame-boundary trimming.
+func trimEncoderConfigs() []trimEncoderConfig {
+	return []trimEncoderConfig{
+		{
+			Name:  "h264_nvenc",
+			Label: "NVIDIA NVENC H.264",
+			Args:  []string{"-c:v", "h264_nvenc", "-preset", "p1", "-cq", "20", "-b:v", "0"},
+		},
+		{
+			Name:  "h264_qsv",
+			Label: "Intel Quick Sync H.264",
+			Args:  []string{"-c:v", "h264_qsv", "-preset", "veryfast", "-global_quality", "20"},
+		},
+		{
+			Name:  "h264_amf",
+			Label: "AMD AMF H.264",
+			Args:  []string{"-c:v", "h264_amf", "-quality", "speed", "-qp_i", "20", "-qp_p", "20"},
+		},
+		defaultTrimEncoderConfig(),
+	}
+}
+
+func defaultTrimEncoderConfig() trimEncoderConfig {
+	return trimEncoderConfig{
+		Name:  "libx264",
+		Label: "CPU x264 H.264",
+		Args:  []string{"-c:v", "libx264", "-preset", "ultrafast", "-crf", "20"},
+	}
+}
+
+func trimEncoderConfigFor(name string) trimEncoderConfig {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return defaultTrimEncoderConfig()
+	}
+	for _, candidate := range trimEncoderConfigs() {
+		if candidate.Name == name {
+			return candidate
+		}
+	}
+	return defaultTrimEncoderConfig()
 }
 
 func trimTimeout(duration time.Duration) time.Duration {
