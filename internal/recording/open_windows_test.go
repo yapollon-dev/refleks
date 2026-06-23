@@ -13,7 +13,7 @@ func TestWindowsOpenRevealCommands(t *testing.T) {
 	}
 
 	reveal := revealVideoCommand(path)
-	if reveal.Name != "explorer.exe" || len(reveal.Args) != 1 || reveal.Args[0] != `/select,`+path {
+	if reveal.Name != "explorer.exe" || len(reveal.Args) != 2 || reveal.Args[0] != `/select,` || reveal.Args[1] != path {
 		t.Fatalf("unexpected reveal command: %#v", reveal)
 	}
 }
