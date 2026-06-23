@@ -1,3 +1,4 @@
+import { DeleteRecordingModal } from '@/features/recordings/components/DeleteRecordingModal'
 import { Button } from '@/shared/components'
 import {
   deleteRecording,
@@ -155,6 +156,7 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [recordingToDelete, setRecordingToDelete] = useState<RecordingRecord | null>(null)
 
   const runKey = primaryRun.item.runId || primaryRun.item.filePath || primaryRun.item.fileName
 
@@ -237,14 +239,12 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
     }
   }
 
-  const handleDelete = async (recording: RecordingRecord) => {
-    const label = recording.scenario || recording.runFileName || 'this recording'
-    if (!window.confirm(`Delete ${label}? This removes only the recording metadata and video file, not the run.`)) return
-
+  const confirmDeleteRecording = async (recording: RecordingRecord) => {
     setBusyId(recording.id)
     setError('')
     try {
       await deleteRecording(recording.id)
+      setRecordingToDelete(null)
       await load()
     } catch (e) {
       setError((e as Error)?.message || 'Failed to delete recording')
@@ -254,7 +254,8 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
   }
 
   return (
-    <StatsGroup label="Recordings">
+    <>
+      <StatsGroup label="Recordings">
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs text-surface-muted-foreground">
           {loading ? 'Loading linked recordings...' : `${linkedRecords.length} linked recording${linkedRecords.length === 1 ? '' : 's'}`}
@@ -306,7 +307,7 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
                 <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => void handleProtect(recording)} title={recording.protected ? 'Unprotect recording' : 'Protect recording'}>
                   {recording.protected ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                 </Button>
-                <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => void handleDelete(recording)} title="Delete recording">
+                <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => setRecordingToDelete(recording)} title="Delete recording">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -314,7 +315,16 @@ function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
           </div>
         )
       })}
-    </StatsGroup>
+      </StatsGroup>
+      <DeleteRecordingModal
+        recording={recordingToDelete}
+        isDeleting={!!recordingToDelete && busyId === recordingToDelete.id}
+        onClose={() => {
+          if (busyId !== recordingToDelete?.id) setRecordingToDelete(null)
+        }}
+        onConfirm={confirmDeleteRecording}
+      />
+    </>
   )
 }
 

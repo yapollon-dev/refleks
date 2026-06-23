@@ -10,6 +10,7 @@ import type { RecordingRecord } from '@/shared/types'
 import { ArrowLeft, FolderOpen, Lock, LockOpen, RefreshCw, Trash2, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { DeleteRecordingModal } from '../components/DeleteRecordingModal'
 import { RecordingVideoPlayer } from '../components/RecordingVideoPlayer'
 import { formatBytes, formatLabel, recordingTitle } from '../lib/recordingFormat'
 
@@ -39,6 +40,7 @@ export function RecordingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -106,14 +108,12 @@ export function RecordingDetailPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!recording) return
-    if (!window.confirm(`Delete ${recordingTitle(recording)}? This removes only the recording metadata and video file, not the run.`)) return
-
+  const confirmDeleteRecording = async (target: RecordingRecord) => {
     setBusy('delete')
     setError('')
     try {
-      await deleteRecording(recording.id)
+      await deleteRecording(target.id)
+      setShowDeleteModal(false)
       navigate('/recordings')
     } catch (e) {
       setError((e as Error)?.message || 'Failed to delete recording')
@@ -172,7 +172,7 @@ export function RecordingDetailPage() {
           <Button variant="ghost" size="icon" onClick={() => void handleRefreshFiles()} disabled={busy === 'refresh'} title="Detect missing file">
             <RefreshCw className={`h-4 w-4 ${busy === 'refresh' ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => void handleDelete()} disabled={busy === 'delete'} title="Delete recording">
+          <Button variant="ghost" size="icon" onClick={() => setShowDeleteModal(true)} disabled={busy === 'delete'} title="Delete recording">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -297,6 +297,14 @@ export function RecordingDetailPage() {
           </div>
         </div>
       </div>
+      <DeleteRecordingModal
+        recording={showDeleteModal ? recording : null}
+        isDeleting={busy === 'delete'}
+        onClose={() => {
+          if (busy !== 'delete') setShowDeleteModal(false)
+        }}
+        onConfirm={confirmDeleteRecording}
+      />
     </div>
   )
 }

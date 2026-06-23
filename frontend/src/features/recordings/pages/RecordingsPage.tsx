@@ -21,6 +21,7 @@ import { EventsOn } from '@wails/runtime'
 import { FolderOpen, HardDrive, Lock, LockOpen, RefreshCw, Search, Trash2, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DeleteRecordingModal } from '../components/DeleteRecordingModal'
 import { formatBytes, formatLabel, formatRecordingDate, formatRecordingScore, recordingScenarioLabel, recordingTitle } from '../lib/recordingFormat'
 
 type StatusFilter = 'all' | RecordingStatusValue
@@ -62,6 +63,7 @@ export function RecordingsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [protectionFilter, setProtectionFilter] = useState<ProtectionFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('newest')
+  const [recordingToDelete, setRecordingToDelete] = useState<RecordingRecord | null>(null)
   const refreshTimer = useRef<number | null>(null)
 
   const load = useCallback(async (showLoading = true) => {
@@ -168,14 +170,12 @@ export function RecordingsPage() {
     }
   }
 
-  const handleDelete = async (recording: RecordingRecord) => {
-    const label = recordingTitle(recording)
-    if (!window.confirm(`Delete ${label}? This removes only the recording metadata and video file, not the run.`)) return
-
+  const confirmDeleteRecording = async (recording: RecordingRecord) => {
     setBusyId(recording.id)
     setError('')
     try {
       await deleteRecording(recording.id)
+      setRecordingToDelete(null)
       await load()
     } catch (e) {
       setError((e as Error)?.message || 'Failed to delete recording')
@@ -480,7 +480,7 @@ export function RecordingsPage() {
                       <Button size="sm" variant="outline" disabled={rowBusy} onClick={event => { stopActionClick(event); void handleProtect(recording) }} title={recording.protected ? 'Unprotect recording' : 'Protect recording'}>
                         {recording.protected ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={event => { stopActionClick(event); void handleDelete(recording) }} title="Delete recording">
+                      <Button size="sm" variant="outline" disabled={rowBusy} onClick={event => { stopActionClick(event); setRecordingToDelete(recording) }} title="Delete recording">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -490,6 +490,14 @@ export function RecordingsPage() {
             </div>
           </div>
         )}
+        <DeleteRecordingModal
+          recording={recordingToDelete}
+          isDeleting={!!recordingToDelete && busyId === recordingToDelete.id}
+          onClose={() => {
+            if (busyId !== recordingToDelete?.id) setRecordingToDelete(null)
+          }}
+          onConfirm={confirmDeleteRecording}
+        />
       </div>
     </div>
   )
