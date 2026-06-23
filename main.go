@@ -71,7 +71,7 @@ func main() {
 func recordingVideoMiddleware(app *App) assetserver.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, recordingVideoRoutePrefix) {
+			if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(r.URL.Path, recordingVideoRoutePrefix) {
 				id, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, recordingVideoRoutePrefix))
 				if err != nil {
 					http.Error(w, "invalid recording id", http.StatusBadRequest)

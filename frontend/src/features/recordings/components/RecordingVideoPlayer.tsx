@@ -138,7 +138,8 @@ export function RecordingVideoPlayer({ src, title, onError }: RecordingVideoPlay
           ref={videoRef}
           key={src}
           src={src}
-          preload="metadata"
+          preload="auto"
+          playsInline
           onClick={() => void togglePlayback()}
           onDoubleClick={toggleFullscreen}
           onLoadedMetadata={event => {

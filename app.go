@@ -407,6 +407,9 @@ func (a *App) serveRecordingVideo(w http.ResponseWriter, r *http.Request, id str
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Content-Disposition", "inline")
 	http.ServeFile(w, r, path)
 }
 
