@@ -52,15 +52,22 @@ ManifestDPIAware true
 
 !define MUI_ICON "..\icon.ico"
 !define MUI_UNICON "..\icon.ico"
+!define REFLEKS_OPTIONAL_REG_KEY "Software\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+!define REFLEKS_FFMPEG_SELECTED_VALUE "BundledFFmpegSelected"
+!define REFLEKS_OBS_INSTALLER_URL "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-Windows-x64-Installer.exe"
+!define REFLEKS_OBS_INSTALLER_SHA256 "94d180c1fc481ccc307b95513f795d088d63ac4f61ad3253c2ac0d94d0844110"
 # !define MUI_WELCOMEFINISHPAGE_BITMAP "resources\leftimage.bmp" #Include this to add a bitmap on the left side of the Welcome Page. Must be a size of 164x314
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
+Var ObsDetected
+
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+!insertmacro MUI_PAGE_COMPONENTS # Optional recording dependencies.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
@@ -79,9 +86,13 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   SetRegView 64
+   Call RestoreOptionalComponentChoices
+   Call DetectOBSForComponents
 FunctionEnd
 
-Section
+Section "!${INFO_PRODUCTNAME}" SecCore
+    SectionIn RO
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
@@ -98,6 +109,76 @@ Section
 
     !insertmacro wails.writeUninstaller
 SectionEnd
+
+Section "FFmpeg for replay trimming" SecFFmpeg
+    SetOutPath "$INSTDIR\ffmpeg"
+    File /r "resources\ffmpeg\*.*"
+    SetOutPath "$INSTDIR\THIRD_PARTY_NOTICES\ffmpeg"
+    File /r "resources\ffmpeg-notices\*.*"
+SectionEnd
+
+Section /o "OBS Studio setup" SecOBS
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR"
+    File "/oname=$PLUGINSDIR\refleks_obs_optional_setup.ps1" "resources\obs_optional_setup.ps1"
+    DetailPrint "Checking optional OBS Studio setup..."
+    nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\refleks_obs_optional_setup.ps1" -DownloadUrl "${REFLEKS_OBS_INSTALLER_URL}" -ExpectedSha256 "${REFLEKS_OBS_INSTALLER_SHA256}"'
+    Pop $0
+    DetailPrint "OBS Studio optional setup finished with non-fatal result code $0. RefleK's installation will continue."
+SectionEnd
+
+Function RestoreOptionalComponentChoices
+    ReadRegDWORD $0 HKLM "${REFLEKS_OPTIONAL_REG_KEY}" "${REFLEKS_FFMPEG_SELECTED_VALUE}"
+    IfErrors done
+    SectionGetFlags ${SecFFmpeg} $1
+    IntCmp $0 0 deselect select select
+    deselect:
+        IntOp $1 $1 & 0xFFFFFFFE
+        SectionSetFlags ${SecFFmpeg} $1
+        Goto done
+    select:
+        IntOp $1 $1 | ${SF_SELECTED}
+        SectionSetFlags ${SecFFmpeg} $1
+    done:
+FunctionEnd
+
+Function DetectOBSForComponents
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR"
+    File "/oname=$PLUGINSDIR\refleks_obs_optional_setup.ps1" "resources\obs_optional_setup.ps1"
+    nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\refleks_obs_optional_setup.ps1" -DetectOnly'
+    Pop $0
+    Pop $1
+    StrCpy $ObsDetected "0"
+    StrCmp $0 "0" detected missing
+    detected:
+        StrCpy $ObsDetected "1"
+        SectionSetText ${SecOBS} "OBS Studio setup (already detected)"
+        Goto done
+    missing:
+        SectionSetText ${SecOBS} "OBS Studio setup (not detected)"
+    done:
+FunctionEnd
+
+Function .onInstSuccess
+    SetRegView 64
+    SectionGetFlags ${SecFFmpeg} $0
+    IntOp $0 $0 & ${SF_SELECTED}
+    IntCmp $0 0 ffmpegOff ffmpegOn ffmpegOn
+    ffmpegOff:
+        WriteRegDWORD HKLM "${REFLEKS_OPTIONAL_REG_KEY}" "${REFLEKS_FFMPEG_SELECTED_VALUE}" 0
+        RMDir /r "$INSTDIR\ffmpeg"
+        Goto done
+    ffmpegOn:
+        WriteRegDWORD HKLM "${REFLEKS_OPTIONAL_REG_KEY}" "${REFLEKS_FFMPEG_SELECTED_VALUE}" 1
+    done:
+FunctionEnd
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "Install RefleK's. Required."
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecFFmpeg} "Install app-owned FFmpeg for replay trimming. No PATH changes are made."
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecOBS} "Optionally download, verify, and launch the official OBS Studio installer. Failure or cancellation will not roll back RefleK's."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "uninstall"
     !insertmacro wails.setShellContext

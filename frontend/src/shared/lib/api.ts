@@ -30,6 +30,7 @@ import {
   SaveCurrentReplay as _SaveCurrentReplay,
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
+  SelectFFmpegPath as _SelectFFmpegPath,
   SelectRecordingDirectory as _SelectRecordingDirectory,
   SetAutostart as _SetAutostart,
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
@@ -157,6 +158,11 @@ export async function getRecordingDirectory(): Promise<string> {
 
 export async function selectRecordingDirectory(): Promise<string> {
   const res = await _SelectRecordingDirectory()
+  return String(res || '')
+}
+
+export async function selectFFmpegPath(): Promise<string> {
+  const res = await _SelectFFmpegPath()
   return String(res || '')
 }
 

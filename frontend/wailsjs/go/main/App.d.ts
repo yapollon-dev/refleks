@@ -66,6 +66,8 @@ export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<vo
 
 export function SaveSessionNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SelectFFmpegPath():Promise<string>;
+
 export function SelectRecordingDirectory():Promise<string>;
 
 export function SetAutostart(arg1:boolean):Promise<void>;

@@ -232,6 +232,15 @@ export function RecordingsPage() {
   const obsStatusLabel = status?.lastConnectionStatus || status?.connectionStatus || 'not checked'
   const replayStatusLabel = status?.lastReplayBufferStatus || status?.replayBufferStatus || 'not checked'
   const obsCheckedAt = checkedAtLabel(status?.lastConnectionCheckedAt)
+  const ffmpegStatusLabel = status?.ffmpegStatus
+    ? `${status.ffmpegStatus}${status.ffmpegSource ? ` (${status.ffmpegSource})` : ''}`
+    : 'not checked'
+  const obsDependencyLabel = status?.obsInstallStatus || 'not checked'
+  const obsWebSocketLabel = status?.obsWebSocketVerified
+    ? 'verified'
+    : status?.obsConnectionDetailsSaved
+      ? 'saved, not verified'
+      : 'not configured'
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
@@ -243,7 +252,7 @@ export function RecordingsPage() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="grid gap-4 md:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-8">
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Recording</div>
             <div className="mt-2 text-base font-medium text-foreground">
@@ -251,9 +260,21 @@ export function RecordingsPage() {
             </div>
           </div>
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">FFmpeg</div>
+            <div className="mt-2 text-base font-medium text-foreground">{ffmpegStatusLabel}</div>
+          </div>
+          <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">OBS install</div>
+            <div className="mt-2 text-base font-medium text-foreground">{obsDependencyLabel}</div>
+          </div>
+          <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Last OBS check</div>
             <div className="mt-2 text-base font-medium text-foreground">{obsStatusLabel}</div>
             {obsCheckedAt && <div className="mt-0.5 text-[11px] text-surface-muted-foreground">{obsCheckedAt}</div>}
+          </div>
+          <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">WebSocket</div>
+            <div className="mt-2 text-base font-medium text-foreground">{obsWebSocketLabel}</div>
           </div>
           <div className="rounded-xl bg-surface px-5 py-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">Replay buffer</div>
@@ -273,6 +294,7 @@ export function RecordingsPage() {
           </div>
         </div>
         {status?.lastError && <p className="mt-3 text-xs text-destructive">{status.lastError}</p>}
+        {status?.ffmpegError && <p className="mt-2 text-xs text-destructive">{status.ffmpegError}</p>}
 
         <div className="mt-4 rounded-xl bg-surface px-5 py-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">

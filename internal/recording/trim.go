@@ -15,6 +15,7 @@ import (
 type videoToolchain struct {
 	FFmpeg  string
 	FFprobe string
+	Source  string
 }
 
 var (
@@ -22,18 +23,6 @@ var (
 	probeVideoDuration = defaultProbeVideoDuration
 	trimReplayVideo    = defaultTrimReplayVideo
 )
-
-func defaultFindVideoToolchain() (videoToolchain, error) {
-	ffmpeg, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		return videoToolchain{}, errors.New("ffmpeg was not found on PATH")
-	}
-	ffprobe, err := exec.LookPath("ffprobe")
-	if err != nil {
-		return videoToolchain{}, errors.New("ffprobe was not found on PATH")
-	}
-	return videoToolchain{FFmpeg: ffmpeg, FFprobe: ffprobe}, nil
-}
 
 // defaultProbeVideoDuration reads container duration so absolute OBS timing can be mapped onto file offsets.
 func defaultProbeVideoDuration(ctx context.Context, toolchain videoToolchain, path string) (time.Duration, error) {

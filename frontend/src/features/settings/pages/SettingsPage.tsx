@@ -19,6 +19,7 @@ import {
   getVersion,
   openURL,
   quitApp,
+  selectFFmpegPath,
   selectRecordingDirectory,
   setAutostart,
   setFont,
@@ -234,6 +235,18 @@ export function SettingsPage() {
     }
   }
 
+  const handleSelectFFmpegPath = async () => {
+    try {
+      const path = await selectFFmpegPath()
+      if (path) {
+        updateRecordingField('ffmpegPath', path)
+      }
+    } catch (e) {
+      console.error('select ffmpeg path error:', e)
+      alert('Failed to select ffmpeg.exe')
+    }
+  }
+
   const handleStartReplayBuffer = async () => {
     if (!settings) return
     setStartingReplayBuffer(true)
@@ -386,6 +399,15 @@ export function SettingsPage() {
   const recordingConnectionLabel = recordingStatus?.lastConnectionStatus || recordingStatus?.connectionStatus || 'not checked'
   const recordingReplayLabel = recordingStatus?.lastReplayBufferStatus || recordingStatus?.replayBufferStatus || 'not checked'
   const recordingCheckTime = formatCheckTime(recordingStatus?.lastConnectionCheckedAt)
+  const ffmpegLabel = recordingStatus?.ffmpegStatus || 'not checked'
+  const ffmpegSourceLabel = recordingStatus?.ffmpegSource ? ` (${recordingStatus.ffmpegSource})` : ''
+  const obsInstallLabel = recordingStatus?.obsInstallStatus || 'not checked'
+  const obsConnectionDetailsLabel = recordingStatus?.obsConnectionDetailsSaved ? 'saved' : 'not saved'
+  const obsWebSocketLabel = recordingStatus?.obsWebSocketVerified
+    ? 'verified'
+    : recordingStatus?.obsConnectionDetailsSaved
+      ? 'saved, not verified'
+      : 'not configured'
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
@@ -572,6 +594,60 @@ export function SettingsPage() {
                     <p className="mt-2 text-xs text-destructive">{recordingStatus.lastError}</p>
                   )}
                 </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg bg-surface-subtle px-3 py-3">
+                    <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">FFmpeg</div>
+                    <div className="mt-1 text-sm font-medium text-foreground">{ffmpegLabel}{ffmpegSourceLabel}</div>
+                    {recordingStatus?.ffmpegPath && (
+                      <div className="mt-1 truncate font-mono text-[11px] text-surface-muted-foreground" title={recordingStatus.ffmpegPath}>
+                        {recordingStatus.ffmpegPath}
+                      </div>
+                    )}
+                    {recordingStatus?.ffmpegCapabilities && (
+                      <div className="mt-1 text-[11px] text-surface-muted-foreground">Capabilities: {recordingStatus.ffmpegCapabilities}</div>
+                    )}
+                    {recordingStatus?.ffmpegError && (
+                      <p className="mt-1 text-xs text-destructive">{recordingStatus.ffmpegError}</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg bg-surface-subtle px-3 py-3">
+                    <div className="text-xs uppercase tracking-wide text-surface-muted-foreground">OBS dependency</div>
+                    <div className="mt-1 text-sm font-medium text-foreground">OBS {obsInstallLabel}</div>
+                    <div className="mt-1 text-[11px] text-surface-muted-foreground">
+                      Connection details: {obsConnectionDetailsLabel} · WebSocket: {obsWebSocketLabel}
+                    </div>
+                    {recordingStatus?.obsInstallPath && (
+                      <div className="mt-1 truncate font-mono text-[11px] text-surface-muted-foreground" title={recordingStatus.obsInstallPath}>
+                        {recordingStatus.obsInstallPath}
+                      </div>
+                    )}
+                    {recordingStatus?.obsInstallStatus === 'missing' && (
+                      <p className="mt-1 text-xs text-surface-muted-foreground">Install OBS Studio or use a portable OBS install with the host and port above.</p>
+                    )}
+                  </div>
+                </div>
+
+                <SettingsField label="Custom FFmpeg Path" description="Optional. Leave blank to use bundled FFmpeg, then system PATH. Pick ffmpeg.exe; ffprobe.exe must be in the same folder.">
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      type="text"
+                      value={recording.ffmpegPath || ''}
+                      onChange={e => updateRecordingField('ffmpegPath', e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      className="min-w-[16rem] flex-1 font-mono"
+                      placeholder="Bundled FFmpeg, then PATH"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleSelectFFmpegPath()}>
+                      Browse
+                    </Button>
+                    {recording.ffmpegPath && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => updateRecordingField('ffmpegPath', '', true)}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </SettingsField>
 
                 <SettingsField label="Recording Folder" description="Default: $HOME/.refleks/recordings">
                   <div className="flex flex-wrap gap-2">

@@ -119,6 +119,8 @@ func (s *Service) Status() models.RecordingRuntimeStatus {
 		status.LastReplayBufferStatus = last.LastReplayBufferStatus
 		status.OBSVersion = last.OBSVersion
 		status.OBSWebSocketVersion = last.OBSWebSocketVersion
+		status.OBSWebSocketVerified = last.OBSWebSocketVerified
+		status.LastConnectionTestSuccessful = last.LastConnectionTestSuccessful
 		status.LastError = last.LastError
 	}
 	return status
@@ -144,6 +146,8 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.OBSWebSocketVerified = false
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -153,11 +157,15 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	status.ConnectionStatus = "not_connected"
 	status.LastConnectionStatus = "connected"
 	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+	status.OBSWebSocketVerified = true
+	status.LastConnectionTestSuccessful = true
 	version, err := client.GetVersion(ctx)
 	if err != nil {
 		status.LastConnectionStatus = "error"
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.OBSWebSocketVerified = false
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -169,6 +177,7 @@ func (s *Service) TestConnection(ctx context.Context) models.RecordingRuntimeSta
 	if err != nil {
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -207,6 +216,8 @@ func (s *Service) StartReplayBuffer(ctx context.Context) models.RecordingRuntime
 		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.OBSWebSocketVerified = false
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -216,6 +227,8 @@ func (s *Service) StartReplayBuffer(ctx context.Context) models.RecordingRuntime
 	status.ConnectionStatus = "not_connected"
 	status.LastConnectionStatus = "connected"
 	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+	status.OBSWebSocketVerified = true
+	status.LastConnectionTestSuccessful = true
 	if version, err := client.GetVersion(ctx); err == nil {
 		status.OBSVersion = version.OBSVersion
 		status.OBSWebSocketVersion = version.OBSWebSocketVersion
@@ -225,6 +238,7 @@ func (s *Service) StartReplayBuffer(ctx context.Context) models.RecordingRuntime
 	if err != nil {
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -239,6 +253,7 @@ func (s *Service) StartReplayBuffer(ctx context.Context) models.RecordingRuntime
 	if err := client.StartReplayBuffer(ctx); err != nil {
 		status.ReplayBufferStatus = "inactive"
 		status.LastReplayBufferStatus = "inactive"
+		status.LastConnectionTestSuccessful = false
 		status.LastError = "failed to start OBS replay buffer: " + err.Error()
 		s.cacheStatus(status)
 		return status
@@ -277,6 +292,8 @@ func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.Recordin
 		status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
 		status.ReplayBufferStatus = "unknown"
 		status.LastReplayBufferStatus = "unknown"
+		status.OBSWebSocketVerified = false
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -286,9 +303,12 @@ func (s *Service) EnsureReplayBufferStarted(ctx context.Context) models.Recordin
 	status.ConnectionStatus = "not_connected"
 	status.LastConnectionStatus = "connected"
 	status.LastConnectionCheckedAt = time.Now().UTC().Format(time.RFC3339)
+	status.OBSWebSocketVerified = true
+	status.LastConnectionTestSuccessful = true
 	if _, err := s.ensureReplayBuffer(ctx, client, cfg); err != nil {
 		status.ReplayBufferStatus = "inactive"
 		status.LastReplayBufferStatus = "inactive"
+		status.LastConnectionTestSuccessful = false
 		status.LastError = err.Error()
 		s.cacheStatus(status)
 		return status
@@ -539,7 +559,7 @@ func (s *Service) trimRecordingForRunLocked(ctx context.Context, cfg models.Reco
 		return failTrim(err)
 	}
 
-	toolchain, err := findVideoToolchain()
+	toolchain, err := findVideoToolchain(cfg)
 	if err != nil {
 		return failTrim(err)
 	}
@@ -749,6 +769,8 @@ func (s *Service) localStatus() models.RecordingRuntimeStatus {
 		ConnectionStatus:   "not_configured",
 		ReplayBufferStatus: "not_checked",
 	}
+	applyFFmpegStatus(&status, cfg)
+	applyOBSInstallStatus(&status, cfg)
 	if s != nil && s.metadata != nil {
 		status.MetadataPath = s.metadata.Path()
 	}

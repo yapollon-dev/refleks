@@ -130,6 +130,10 @@ export function SaveSessionNote(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveSessionNote'](arg1, arg2, arg3);
 }
 
+export function SelectFFmpegPath() {
+  return window['go']['main']['App']['SelectFFmpegPath']();
+}
+
 export function SelectRecordingDirectory() {
   return window['go']['main']['App']['SelectRecordingDirectory']();
 }

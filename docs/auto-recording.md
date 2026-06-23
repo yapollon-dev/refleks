@@ -27,7 +27,15 @@ If exact boundaries cannot be established, RefleK's keeps the full replay and ma
 
 If the replay buffer does not contain the full requested clip window, RefleK's trims the available portion and marks the recording as truncated. A truncated recording is not presented as a full exact clip.
 
-RefleK's requires `ffmpeg` and `ffprobe` to be available on `PATH` for trimming. If they are missing or trimming fails, the full replay remains linked and playable.
+RefleK's requires working `ffmpeg` and `ffprobe` binaries for trimming. The Windows installer can install app-owned FFmpeg under the RefleK's install folder, so users do not need to add FFmpeg to `PATH`.
+
+FFmpeg lookup order is:
+
+1. A custom FFmpeg path configured in Settings.
+2. The bundled app-owned FFmpeg folder.
+3. FFmpeg available through the system `PATH`.
+
+RefleK's validates the selected FFmpeg toolchain against the current trimming pipeline, including MP4 probing, MP4 input, `libx264`, AAC audio, optional audio mapping and `+faststart`. If FFmpeg is missing, broken or fails trimming, the full replay remains linked and playable with a clear warning.
 
 Configure the OBS replay buffer so it is longer than:
 
@@ -43,6 +51,10 @@ RefleK's cannot recover footage that has already left the OBS replay buffer.
 
 ## OBS Setup
 
+The Windows installer has an optional OBS Studio setup component. It is off by default. When selected, RefleK's uses the official OBS installer instead of repackaging OBS. If OBS is already detected, the optional setup is skipped.
+
+Portable or custom OBS installations may not be detected by the installer, but they are still usable. Configure the OBS host, port and password in RefleK's Settings and use Test OBS Connection to verify WebSocket access.
+
 1. Open OBS.
 2. Open OBS Settings and enable the replay buffer.
 3. Configure a replay-buffer duration long enough for the scenarios you play.
@@ -56,6 +68,16 @@ OBS must be running and reachable for recordings to work.
 When Auto Connect and Auto-start Replay Buffer are enabled, RefleK's attempts to prepare the replay buffer when the app starts and when recording settings are updated.
 
 Testing the OBS connection only checks authentication, OBS version and replay-buffer status. It does not start the replay buffer. Use the separate start action or start it manually in OBS.
+
+The dependency status in Settings distinguishes:
+
+* OBS installed or missing.
+* OBS connection details saved in RefleK's.
+* OBS WebSocket verified by the last successful connection test.
+* Replay buffer active or inactive.
+* FFmpeg installed, working, missing or broken.
+
+Saved host and port settings alone do not mean WebSocket is configured. RefleK's only marks WebSocket as verified after a successful connection/authentication/status check.
 
 ## Recording Folder
 
@@ -175,7 +197,7 @@ Correct run-to-recording linking takes priority over saving a clip when the resu
 A recording can still be saved as a full replay with a trim warning when:
 
 * Kovaak's timing fields are missing or ambiguous.
-* `ffmpeg` or `ffprobe` is unavailable.
+* `ffmpeg` or `ffprobe` is unavailable or fails capability validation.
 * Trimming fails validation.
 
 In those cases, the recording remains linked to the run but is not presented as an exact trimmed clip.
@@ -201,3 +223,11 @@ Recording metadata and videos remain on the local machine unless the user moves 
 The OBS password is stored locally and protected using the current Windows user account. It is not returned to the frontend after being saved.
 
 Passwords protected for one Windows user or computer may not be usable after moving the settings file to another account or machine.
+
+## Third-Party Dependency Notes
+
+The Windows installer can include a pinned gyan.dev FFmpeg GPLv3 build for replay trimming. RefleK's itself is GPLv3 and the installer includes FFmpeg version information, build configuration, license notices and corresponding-source instructions under `THIRD_PARTY_NOTICES/ffmpeg`.
+
+The FFmpeg staging script verifies that those packaging artifacts are present for the pinned package. It is a packaging checklist, not a legal determination.
+
+OBS Studio is not redistributed inside RefleK's. If selected, the installer downloads the official OBS installer, verifies the pinned SHA-256 and Authenticode signer and launches it interactively. OBS cancellation or setup failure leaves RefleK's installed; complete OBS setup later from OBS Studio or RefleK's Settings guidance.

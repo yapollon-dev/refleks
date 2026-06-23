@@ -458,6 +458,19 @@ func (a *App) SelectRecordingDirectory() (string, error) {
 	})
 }
 
+// SelectFFmpegPath opens a native file picker for an optional custom ffmpeg.exe path.
+func (a *App) SelectFFmpegPath() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Choose ffmpeg.exe",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "FFmpeg executable",
+				Pattern:     "*.exe",
+			},
+		},
+	})
+}
+
 // --- App metadata ---
 
 // GetVersion returns the current application version.

@@ -53,6 +53,7 @@ type RecordingSettings struct {
 	SavePolicy            RecordingPolicy `json:"savePolicy"`
 	AlwaysSaveScenarios   []string        `json:"alwaysSaveScenarios,omitempty"`
 	NeverSaveScenarios    []string        `json:"neverSaveScenarios,omitempty"`
+	FFmpegPath            string          `json:"ffmpegPath,omitempty"`
 	RecordingDir          string          `json:"recordingDir"`
 	StorageLimitGB        int             `json:"storageLimitGb"`
 	MinFreeSpaceGB        int             `json:"minFreeSpaceGb"`
@@ -112,22 +113,35 @@ type RecordingRecord struct {
 }
 
 type RecordingRuntimeStatus struct {
-	Enabled                 bool   `json:"enabled"`
-	RecordingDir            string `json:"recordingDir"`
-	MetadataPath            string `json:"metadataPath"`
-	TotalRecordings         int    `json:"totalRecordings"`
-	TotalSizeBytes          int64  `json:"totalSizeBytes"`
-	StorageLimitBytes       int64  `json:"storageLimitBytes"`
-	MinFreeSpaceBytes       int64  `json:"minFreeSpaceBytes"`
-	FreeSpaceBytes          int64  `json:"freeSpaceBytes"`
-	ConnectionStatus        string `json:"connectionStatus"`
-	ReplayBufferStatus      string `json:"replayBufferStatus"`
-	LastConnectionStatus    string `json:"lastConnectionStatus,omitempty"`
-	LastConnectionCheckedAt string `json:"lastConnectionCheckedAt,omitempty"`
-	LastReplayBufferStatus  string `json:"lastReplayBufferStatus,omitempty"`
-	OBSVersion              string `json:"obsVersion,omitempty"`
-	OBSWebSocketVersion     string `json:"obsWebSocketVersion,omitempty"`
-	LastError               string `json:"lastError,omitempty"`
+	Enabled                      bool   `json:"enabled"`
+	RecordingDir                 string `json:"recordingDir"`
+	MetadataPath                 string `json:"metadataPath"`
+	TotalRecordings              int    `json:"totalRecordings"`
+	TotalSizeBytes               int64  `json:"totalSizeBytes"`
+	StorageLimitBytes            int64  `json:"storageLimitBytes"`
+	MinFreeSpaceBytes            int64  `json:"minFreeSpaceBytes"`
+	FreeSpaceBytes               int64  `json:"freeSpaceBytes"`
+	ConnectionStatus             string `json:"connectionStatus"`
+	ReplayBufferStatus           string `json:"replayBufferStatus"`
+	LastConnectionStatus         string `json:"lastConnectionStatus,omitempty"`
+	LastConnectionCheckedAt      string `json:"lastConnectionCheckedAt,omitempty"`
+	LastReplayBufferStatus       string `json:"lastReplayBufferStatus,omitempty"`
+	OBSVersion                   string `json:"obsVersion,omitempty"`
+	OBSWebSocketVersion          string `json:"obsWebSocketVersion,omitempty"`
+	OBSInstallStatus             string `json:"obsInstallStatus,omitempty"`
+	OBSInstallPath               string `json:"obsInstallPath,omitempty"`
+	OBSInstallVersion            string `json:"obsInstallVersion,omitempty"`
+	OBSConnectionDetailsSaved    bool   `json:"obsConnectionDetailsSaved,omitempty"`
+	OBSWebSocketVerified         bool   `json:"obsWebSocketVerified,omitempty"`
+	LastConnectionTestSuccessful bool   `json:"lastConnectionTestSuccessful,omitempty"`
+	FFmpegStatus                 string `json:"ffmpegStatus,omitempty"`
+	FFmpegSource                 string `json:"ffmpegSource,omitempty"`
+	FFmpegPath                   string `json:"ffmpegPath,omitempty"`
+	FFmpegVersion                string `json:"ffmpegVersion,omitempty"`
+	FFprobeVersion               string `json:"ffprobeVersion,omitempty"`
+	FFmpegCapabilities           string `json:"ffmpegCapabilities,omitempty"`
+	FFmpegError                  string `json:"ffmpegError,omitempty"`
+	LastError                    string `json:"lastError,omitempty"`
 }
 
 type RecordingCleanupItem struct {

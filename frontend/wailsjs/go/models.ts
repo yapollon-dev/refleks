@@ -1,14 +1,14 @@
 export namespace models {
-
+	
 	export class BenchmarkSubcategory {
 	    subcategoryName: string;
 	    scenarioCount: number;
 	    color?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkSubcategory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.subcategoryName = source["subcategoryName"];
@@ -20,18 +20,18 @@ export namespace models {
 	    categoryName: string;
 	    color?: string;
 	    subcategories: BenchmarkSubcategory[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkCategory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.categoryName = source["categoryName"];
 	        this.color = source["color"];
 	        this.subcategories = this.convertValues(source["subcategories"], BenchmarkSubcategory);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -53,11 +53,11 @@ export namespace models {
 	export class RankDef {
 	    name: string;
 	    color: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RankDef(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -70,11 +70,11 @@ export namespace models {
 	    sharecode: string;
 	    ranks: RankDef[];
 	    categories: BenchmarkCategory[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkDifficulty(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.difficultyName = source["difficultyName"];
@@ -83,7 +83,7 @@ export namespace models {
 	        this.ranks = this.convertValues(source["ranks"], RankDef);
 	        this.categories = this.convertValues(source["categories"], BenchmarkCategory);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -110,11 +110,11 @@ export namespace models {
 	    spreadsheetURL: string;
 	    dateAdded?: string;
 	    difficulties: BenchmarkDifficulty[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Benchmark(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.benchmarkName = source["benchmarkName"];
@@ -125,7 +125,7 @@ export namespace models {
 	        this.dateAdded = source["dateAdded"];
 	        this.difficulties = this.convertValues(source["difficulties"], BenchmarkDifficulty);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -144,8 +144,8 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class ScenarioProgress {
 	    name: string;
 	    score: number;
@@ -153,11 +153,11 @@ export namespace models {
 	    thresholds: number[];
 	    energy?: number;
 	    progress: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ScenarioProgress(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -173,11 +173,11 @@ export namespace models {
 	    color?: string;
 	    scenarios: ScenarioProgress[];
 	    energy?: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProgressGroup(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -185,7 +185,7 @@ export namespace models {
 	        this.scenarios = this.convertValues(source["scenarios"], ScenarioProgress);
 	        this.energy = source["energy"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -208,18 +208,18 @@ export namespace models {
 	    name: string;
 	    color?: string;
 	    groups: ProgressGroup[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProgressCategory(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.color = source["color"];
 	        this.groups = this.convertValues(source["groups"], ProgressGroup);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -243,11 +243,11 @@ export namespace models {
 	    benchmarkProgress: number;
 	    ranks: RankDef[];
 	    categories: ProgressCategory[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BenchmarkProgress(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.overallRank = source["overallRank"];
@@ -255,7 +255,7 @@ export namespace models {
 	        this.ranks = this.convertValues(source["ranks"], RankDef);
 	        this.categories = this.convertValues(source["categories"], ProgressCategory);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -274,7 +274,7 @@ export namespace models {
 		    return a;
 		}
 	}
-
+	
 	export class KovaaksScoreAttributes {
 	    fov: number;
 	    hash: string;
@@ -295,11 +295,11 @@ export namespace models {
 	    scenarioVersion: string;
 	    clientBuildVersion: string;
 	    epoch: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new KovaaksScoreAttributes(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.fov = source["fov"];
@@ -327,18 +327,18 @@ export namespace models {
 	    id: string;
 	    type: string;
 	    attributes: KovaaksScoreAttributes;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new KovaaksLastScore(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.type = source["type"];
 	        this.attributes = this.convertValues(source["attributes"], KovaaksScoreAttributes);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -357,10 +357,10 @@ export namespace models {
 		    return a;
 		}
 	}
-
-
-
-
+	
+	
+	
+	
 	export class RecordingCleanupItem {
 	    id: string;
 	    scenario: string;
@@ -370,11 +370,11 @@ export namespace models {
 	    createdAt: string;
 	    protected: boolean;
 	    pbAtSave: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RecordingCleanupItem(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -405,11 +405,11 @@ export namespace models {
 	    items: RecordingCleanupItem[];
 	    deletedCount: number;
 	    deletedBytes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RecordingCleanupPreview(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.totalSizeBytes = source["totalSizeBytes"];
@@ -430,7 +430,7 @@ export namespace models {
 	        this.deletedCount = source["deletedCount"];
 	        this.deletedBytes = source["deletedBytes"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -496,11 +496,11 @@ export namespace models {
 	    createdAt: string;
 	    updatedAt: string;
 	    lastError?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RecordingRecord(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -567,12 +567,25 @@ export namespace models {
 	    lastReplayBufferStatus?: string;
 	    obsVersion?: string;
 	    obsWebSocketVersion?: string;
+	    obsInstallStatus?: string;
+	    obsInstallPath?: string;
+	    obsInstallVersion?: string;
+	    obsConnectionDetailsSaved?: boolean;
+	    obsWebSocketVerified?: boolean;
+	    lastConnectionTestSuccessful?: boolean;
+	    ffmpegStatus?: string;
+	    ffmpegSource?: string;
+	    ffmpegPath?: string;
+	    ffmpegVersion?: string;
+	    ffprobeVersion?: string;
+	    ffmpegCapabilities?: string;
+	    ffmpegError?: string;
 	    lastError?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RecordingRuntimeStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -590,6 +603,19 @@ export namespace models {
 	        this.lastReplayBufferStatus = source["lastReplayBufferStatus"];
 	        this.obsVersion = source["obsVersion"];
 	        this.obsWebSocketVersion = source["obsWebSocketVersion"];
+	        this.obsInstallStatus = source["obsInstallStatus"];
+	        this.obsInstallPath = source["obsInstallPath"];
+	        this.obsInstallVersion = source["obsInstallVersion"];
+	        this.obsConnectionDetailsSaved = source["obsConnectionDetailsSaved"];
+	        this.obsWebSocketVerified = source["obsWebSocketVerified"];
+	        this.lastConnectionTestSuccessful = source["lastConnectionTestSuccessful"];
+	        this.ffmpegStatus = source["ffmpegStatus"];
+	        this.ffmpegSource = source["ffmpegSource"];
+	        this.ffmpegPath = source["ffmpegPath"];
+	        this.ffmpegVersion = source["ffmpegVersion"];
+	        this.ffprobeVersion = source["ffprobeVersion"];
+	        this.ffmpegCapabilities = source["ffmpegCapabilities"];
+	        this.ffmpegError = source["ffmpegError"];
 	        this.lastError = source["lastError"];
 	    }
 	}
@@ -605,6 +631,7 @@ export namespace models {
 	    savePolicy: string;
 	    alwaysSaveScenarios?: string[];
 	    neverSaveScenarios?: string[];
+	    ffmpegPath?: string;
 	    recordingDir: string;
 	    storageLimitGb: number;
 	    minFreeSpaceGb: number;
@@ -612,11 +639,11 @@ export namespace models {
 	    preRollSeconds: number;
 	    postRollSeconds: number;
 	    keepRawReplay: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RecordingSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -630,6 +657,7 @@ export namespace models {
 	        this.savePolicy = source["savePolicy"];
 	        this.alwaysSaveScenarios = source["alwaysSaveScenarios"];
 	        this.neverSaveScenarios = source["neverSaveScenarios"];
+	        this.ffmpegPath = source["ffmpegPath"];
 	        this.recordingDir = source["recordingDir"];
 	        this.storageLimitGb = source["storageLimitGb"];
 	        this.minFreeSpaceGb = source["minFreeSpaceGb"];
@@ -662,11 +690,11 @@ export namespace models {
 	    tracePoints: number;
 	    traceDuration: number;
 	    sampleRate: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RunEnvironment(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.appVersion = source["appVersion"];
@@ -700,11 +728,11 @@ export namespace models {
 	    stats: Record<string, any>;
 	    events: string[][];
 	    env: RunEnvironment;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RunRecord(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.runId = source["runId"];
@@ -714,7 +742,7 @@ export namespace models {
 	        this.events = source["events"];
 	        this.env = this.convertValues(source["env"], RunEnvironment);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -736,26 +764,26 @@ export namespace models {
 	export class ScenarioNote {
 	    notes: string;
 	    sens: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ScenarioNote(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.notes = source["notes"];
 	        this.sens = source["sens"];
 	    }
 	}
-
+	
 	export class SessionNote {
 	    name: string;
 	    notes: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SessionNote(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -782,11 +810,11 @@ export namespace models {
 	    recording: RecordingSettings;
 	    scenarioNotes?: Record<string, ScenarioNote>;
 	    sessionNotes?: Record<string, SessionNote>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.steamInstallDir = source["steamInstallDir"];
@@ -809,7 +837,7 @@ export namespace models {
 	        this.scenarioNotes = this.convertValues(source["scenarioNotes"], ScenarioNote, true);
 	        this.sessionNotes = this.convertValues(source["sessionNotes"], SessionNote, true);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -834,11 +862,11 @@ export namespace models {
 	    hasUpdate: boolean;
 	    downloadUrl?: string;
 	    releaseNotes?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UpdateInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.currentVersion = source["currentVersion"];

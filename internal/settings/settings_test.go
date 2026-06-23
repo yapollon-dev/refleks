@@ -31,6 +31,9 @@ func TestDefaultRecordingSettings(t *testing.T) {
 	if got.KeepRawReplay {
 		t.Fatalf("raw replay retention should default to disabled")
 	}
+	if got.FFmpegPath != "" {
+		t.Fatalf("custom ffmpeg path should default to empty")
+	}
 	if got.SavePolicy != models.RecordingPolicyEveryRun {
 		t.Fatalf("save policy = %q, want %q", got.SavePolicy, models.RecordingPolicyEveryRun)
 	}
@@ -67,6 +70,7 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 		AutoConnect:           false,
 		AutoStartReplayBuffer: false,
 		SavePolicy:            models.RecordingPolicyNewPB,
+		FFmpegPath:            "C:/tools/ffmpeg/bin",
 		RecordingDir:          "C:/clips",
 		StorageLimitGB:        10,
 		MinFreeSpaceGB:        2,
@@ -77,6 +81,9 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 	}
 	if got.RecordingDir != filepath.Clean("C:/clips") {
 		t.Fatalf("recording dir = %q, want cleaned path", got.RecordingDir)
+	}
+	if got.FFmpegPath != filepath.Clean("C:/tools/ffmpeg/bin") {
+		t.Fatalf("ffmpeg path = %q, want cleaned path", got.FFmpegPath)
 	}
 }
 

@@ -489,7 +489,7 @@ func withFakeVideoTrim(t *testing.T, rawDuration time.Duration, payload []byte) 
 	previousProbe := probeVideoDuration
 	previousTrim := trimReplayVideo
 	var captured replayClipPlan
-	findVideoToolchain = func() (videoToolchain, error) {
+	findVideoToolchain = func(cfg models.RecordingSettings) (videoToolchain, error) {
 		return videoToolchain{FFmpeg: "fake-ffmpeg", FFprobe: "fake-ffprobe"}, nil
 	}
 	probeVideoDuration = func(ctx context.Context, toolchain videoToolchain, path string) (time.Duration, error) {

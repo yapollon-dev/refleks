@@ -151,6 +151,9 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 	} else {
 		r.RecordingDir = filepath.Clean(ExpandPathPlaceholders(r.RecordingDir))
 	}
+	if strings.TrimSpace(r.FFmpegPath) != "" {
+		r.FFmpegPath = filepath.Clean(ExpandPathPlaceholders(r.FFmpegPath))
+	}
 	if r.StorageLimitGB <= 0 {
 		r.StorageLimitGB = defaults.StorageLimitGB
 	}
@@ -190,6 +193,7 @@ func recordingSettingsAbsent(r models.RecordingSettings) bool {
 		strings.TrimSpace(string(r.SavePolicy)) == "" &&
 		len(r.AlwaysSaveScenarios) == 0 &&
 		len(r.NeverSaveScenarios) == 0 &&
+		strings.TrimSpace(r.FFmpegPath) == "" &&
 		strings.TrimSpace(r.RecordingDir) == "" &&
 		r.StorageLimitGB == 0 &&
 		r.MinFreeSpaceGB == 0 &&

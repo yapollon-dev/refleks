@@ -202,6 +202,7 @@ export interface RecordingSettings {
   savePolicy: RecordingPolicy
   alwaysSaveScenarios?: string[]
   neverSaveScenarios?: string[]
+  ffmpegPath?: string
   recordingDir: string
   storageLimitGb: number
   minFreeSpaceGb: number
@@ -276,6 +277,19 @@ export interface RecordingRuntimeStatus {
   lastReplayBufferStatus?: string
   obsVersion?: string
   obsWebSocketVersion?: string
+  obsInstallStatus?: string
+  obsInstallPath?: string
+  obsInstallVersion?: string
+  obsConnectionDetailsSaved?: boolean
+  obsWebSocketVerified?: boolean
+  lastConnectionTestSuccessful?: boolean
+  ffmpegStatus?: string
+  ffmpegSource?: string
+  ffmpegPath?: string
+  ffmpegVersion?: string
+  ffprobeVersion?: string
+  ffmpegCapabilities?: string
+  ffmpegError?: string
   lastError?: string
 }
 
