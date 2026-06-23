@@ -415,4 +415,16 @@ func applyOBSInstallStatus(status *models.RecordingRuntimeStatus, cfg models.Rec
 	status.OBSInstallPath = info.Path
 	status.OBSInstallVersion = info.Version
 	status.OBSConnectionDetailsSaved = strings.TrimSpace(cfg.OBSHost) != "" && cfg.OBSPort > 0
+	processName := "obs64.exe"
+	if strings.TrimSpace(cfg.OBSExecutablePath) != "" {
+		processName = filepath.Base(cfg.OBSExecutablePath)
+	}
+	if isOBSProcessRunning(processName) || (processName != "obs64.exe" && isOBSProcessRunning("obs64.exe")) {
+		status.OBSProcessStatus = obsProcessStatusRunning
+	} else {
+		status.OBSProcessStatus = obsProcessStatusNotRunning
+	}
+	if status.OBSLaunchStatus == "" {
+		status.OBSLaunchStatus = obsLaunchStatusNotChecked
+	}
 }

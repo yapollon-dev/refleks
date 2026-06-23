@@ -573,6 +573,12 @@ export namespace models {
 	    obsConnectionDetailsSaved?: boolean;
 	    obsWebSocketVerified?: boolean;
 	    lastConnectionTestSuccessful?: boolean;
+	    obsProcessStatus?: string;
+	    obsLaunchStatus?: string;
+	    obsLaunchPath?: string;
+	    obsLaunchCheckedAt?: string;
+	    obsLaunchLastError?: string;
+	    obsLaunchedByRefleks?: boolean;
 	    ffmpegStatus?: string;
 	    ffmpegSource?: string;
 	    ffmpegPath?: string;
@@ -609,6 +615,12 @@ export namespace models {
 	        this.obsConnectionDetailsSaved = source["obsConnectionDetailsSaved"];
 	        this.obsWebSocketVerified = source["obsWebSocketVerified"];
 	        this.lastConnectionTestSuccessful = source["lastConnectionTestSuccessful"];
+	        this.obsProcessStatus = source["obsProcessStatus"];
+	        this.obsLaunchStatus = source["obsLaunchStatus"];
+	        this.obsLaunchPath = source["obsLaunchPath"];
+	        this.obsLaunchCheckedAt = source["obsLaunchCheckedAt"];
+	        this.obsLaunchLastError = source["obsLaunchLastError"];
+	        this.obsLaunchedByRefleks = source["obsLaunchedByRefleks"];
 	        this.ffmpegStatus = source["ffmpegStatus"];
 	        this.ffmpegSource = source["ffmpegSource"];
 	        this.ffmpegPath = source["ffmpegPath"];
@@ -628,6 +640,9 @@ export namespace models {
 	    obsPasswordSet?: boolean;
 	    autoConnect: boolean;
 	    autoStartReplayBuffer: boolean;
+	    autoLaunchObs: boolean;
+	    launchObsMinimizedToTray: boolean;
+	    obsExecutablePath?: string;
 	    savePolicy: string;
 	    alwaysSaveScenarios?: string[];
 	    neverSaveScenarios?: string[];
@@ -654,6 +669,9 @@ export namespace models {
 	        this.obsPasswordSet = source["obsPasswordSet"];
 	        this.autoConnect = source["autoConnect"];
 	        this.autoStartReplayBuffer = source["autoStartReplayBuffer"];
+	        this.autoLaunchObs = source["autoLaunchObs"];
+	        this.launchObsMinimizedToTray = source["launchObsMinimizedToTray"];
+	        this.obsExecutablePath = source["obsExecutablePath"];
 	        this.savePolicy = source["savePolicy"];
 	        this.alwaysSaveScenarios = source["alwaysSaveScenarios"];
 	        this.neverSaveScenarios = source["neverSaveScenarios"];

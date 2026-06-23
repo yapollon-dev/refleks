@@ -199,6 +199,9 @@ export interface RecordingSettings {
   obsPasswordSet?: boolean
   autoConnect: boolean
   autoStartReplayBuffer: boolean
+  autoLaunchObs: boolean
+  launchObsMinimizedToTray: boolean
+  obsExecutablePath?: string
   savePolicy: RecordingPolicy
   alwaysSaveScenarios?: string[]
   neverSaveScenarios?: string[]
@@ -283,6 +286,12 @@ export interface RecordingRuntimeStatus {
   obsConnectionDetailsSaved?: boolean
   obsWebSocketVerified?: boolean
   lastConnectionTestSuccessful?: boolean
+  obsProcessStatus?: string
+  obsLaunchStatus?: string
+  obsLaunchPath?: string
+  obsLaunchCheckedAt?: string
+  obsLaunchLastError?: string
+  obsLaunchedByRefleks?: boolean
   ffmpegStatus?: string
   ffmpegSource?: string
   ffmpegPath?: string

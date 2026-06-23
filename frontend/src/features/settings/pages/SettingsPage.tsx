@@ -16,10 +16,13 @@ import {
   checkForUpdates,
   downloadAndInstallUpdate,
   getSettings,
+  getRecordingStatus,
   getVersion,
+  launchRecordingOBS,
   openURL,
   quitApp,
   selectFFmpegPath,
+  selectOBSExecutablePath,
   selectRecordingDirectory,
   setAutostart,
   setFont,
@@ -30,6 +33,7 @@ import {
   type Font,
   type Theme,
 } from '@/shared/lib'
+import { EventsOn } from '@wails/runtime'
 import type { RecordingRuntimeStatus, RecordingSettings, Settings, UpdateInfo } from '@/shared/types'
 import { ChevronDown, ChevronUp, Download, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -97,12 +101,36 @@ export function SettingsPage() {
   const [recordingStatus, setRecordingStatus] = useState<RecordingRuntimeStatus | null>(null)
   const [testingRecordingConnection, setTestingRecordingConnection] = useState(false)
   const [startingReplayBuffer, setStartingReplayBuffer] = useState(false)
+  const [launchingOBS, setLaunchingOBS] = useState(false)
 
   useEffect(() => {
     getSettings().then(setSettings).catch(() => { })
+    getRecordingStatus().then(setRecordingStatus).catch(() => { })
     getVersion()
       .then(v => setCurrentVersion(v))
       .catch(() => setCurrentVersion(''))
+  }, [])
+
+  useEffect(() => {
+    let refreshTimer: number | null = null
+    const scheduleStatusRefresh = () => {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer)
+      }
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null
+        getRecordingStatus().then(setRecordingStatus).catch(() => { })
+      }, 200)
+    }
+    const offStatus = EventsOn('recording:status:changed', scheduleStatusRefresh)
+    const offRecordings = EventsOn('recordings:changed', scheduleStatusRefresh)
+    return () => {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer)
+      }
+      offStatus()
+      offRecordings()
+    }
   }, [])
 
   useEffect(() => {
@@ -244,6 +272,46 @@ export function SettingsPage() {
     } catch (e) {
       console.error('select ffmpeg path error:', e)
       alert('Failed to select ffmpeg.exe')
+    }
+  }
+
+  const handleSelectOBSExecutablePath = async () => {
+    try {
+      const path = await selectOBSExecutablePath()
+      if (path) {
+        updateRecordingField('obsExecutablePath', path)
+      }
+    } catch (e) {
+      console.error('select OBS executable error:', e)
+      alert('Failed to select OBS executable')
+    }
+  }
+
+  const handleLaunchOBS = async () => {
+    if (!settings) return
+    setLaunchingOBS(true)
+    try {
+      await queueSettingsSave(settings)
+      const next = await launchRecordingOBS()
+      setRecordingStatus(next)
+    } catch (e) {
+      setRecordingStatus(prev => ({
+        enabled: settings.recording.enabled,
+        recordingDir: settings.recording.recordingDir,
+        metadataPath: prev?.metadataPath || '',
+        totalRecordings: prev?.totalRecordings || 0,
+        totalSizeBytes: prev?.totalSizeBytes || 0,
+        storageLimitBytes: prev?.storageLimitBytes || 0,
+        minFreeSpaceBytes: prev?.minFreeSpaceBytes || 0,
+        freeSpaceBytes: prev?.freeSpaceBytes || 0,
+        connectionStatus: 'not_connected',
+        replayBufferStatus: 'unknown',
+        obsLaunchStatus: 'launch_failed',
+        obsLaunchLastError: (e as Error)?.message || 'Failed to launch OBS',
+        lastError: (e as Error)?.message || 'Failed to launch OBS',
+      }))
+    } finally {
+      setLaunchingOBS(false)
     }
   }
 
@@ -408,6 +476,8 @@ export function SettingsPage() {
     : recordingStatus?.obsConnectionDetailsSaved
       ? 'saved, not verified'
       : 'not configured'
+  const obsProcessLabel = recordingStatus?.obsProcessStatus || 'not checked'
+  const obsLaunchLabel = recordingStatus?.obsLaunchStatus || 'not checked'
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-sm">
@@ -549,6 +619,27 @@ export function SettingsPage() {
                   </SettingsField>
                 </div>
 
+                <SettingsField label="OBS Executable Path" description="Optional. Leave blank to auto-detect OBS; set this for portable or custom installs.">
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      type="text"
+                      value={recording.obsExecutablePath || ''}
+                      onChange={e => updateRecordingField('obsExecutablePath', e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      className="min-w-[16rem] flex-1 font-mono"
+                      placeholder="Auto-detect obs64.exe"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleSelectOBSExecutablePath()}>
+                      Browse
+                    </Button>
+                    {recording.obsExecutablePath && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => updateRecordingField('obsExecutablePath', '', true)}>
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </SettingsField>
+
                 <SettingsField label="OBS Password" description="Stored locally with Windows user protection and masked in the UI.">
                   <div className="flex flex-wrap gap-2">
                     <Input
@@ -569,6 +660,9 @@ export function SettingsPage() {
 
                 <div className="rounded-lg bg-surface-subtle px-3 py-3">
                   <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleLaunchOBS()} disabled={launchingOBS}>
+                      {launchingOBS ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Launching...</> : 'Launch OBS'}
+                    </Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => void handleTestRecordingConnection()} disabled={testingRecordingConnection}>
                       {testingRecordingConnection ? <><RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />Testing...</> : 'Test OBS Connection'}
                     </Button>
@@ -581,6 +675,12 @@ export function SettingsPage() {
                     <span className="text-xs text-surface-muted-foreground">
                       Replay buffer: <span className="font-medium text-foreground">{recordingReplayLabel}</span>
                     </span>
+                    <span className="text-xs text-surface-muted-foreground">
+                      OBS process: <span className="font-medium text-foreground">{obsProcessLabel}</span>
+                    </span>
+                    <span className="text-xs text-surface-muted-foreground">
+                      Launch: <span className="font-medium text-foreground">{obsLaunchLabel}</span>
+                    </span>
                     {recordingCheckTime && (
                       <span className="text-xs text-surface-muted-foreground">Checked {recordingCheckTime}</span>
                     )}
@@ -592,6 +692,9 @@ export function SettingsPage() {
                   )}
                   {recordingStatus?.lastError && (
                     <p className="mt-2 text-xs text-destructive">{recordingStatus.lastError}</p>
+                  )}
+                  {recordingStatus?.obsLaunchLastError && recordingStatus.obsLaunchLastError !== recordingStatus.lastError && (
+                    <p className="mt-2 text-xs text-destructive">{recordingStatus.obsLaunchLastError}</p>
                   )}
                 </div>
 
@@ -616,6 +719,9 @@ export function SettingsPage() {
                     <div className="mt-1 text-sm font-medium text-foreground">OBS {obsInstallLabel}</div>
                     <div className="mt-1 text-[11px] text-surface-muted-foreground">
                       Connection details: {obsConnectionDetailsLabel} · WebSocket: {obsWebSocketLabel}
+                    </div>
+                    <div className="mt-1 text-[11px] text-surface-muted-foreground">
+                      Process: {obsProcessLabel} · Launch: {obsLaunchLabel}
                     </div>
                     {recordingStatus?.obsInstallPath && (
                       <div className="mt-1 truncate font-mono text-[11px] text-surface-muted-foreground" title={recordingStatus.obsInstallPath}>
@@ -741,6 +847,21 @@ export function SettingsPage() {
                       onKeyDown={handleInputKeyDown}
                       min={1}
                       className="w-24 text-center"
+                    />
+                  </SettingsField>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsField label="Auto-launch OBS" description="When auto recording and auto connect are enabled, start OBS once during RefleK's startup." checkbox>
+                    <Checkbox
+                      checked={!!recording.autoLaunchObs}
+                      onCheckedChange={v => updateRecordingField('autoLaunchObs', v === true, true)}
+                    />
+                  </SettingsField>
+                  <SettingsField label="Launch OBS Minimized" description="Use OBS --minimize-to-tray when RefleK's launches OBS." checkbox>
+                    <Checkbox
+                      checked={!!recording.launchObsMinimizedToTray}
+                      onCheckedChange={v => updateRecordingField('launchObsMinimizedToTray', v === true, true)}
                     />
                   </SettingsField>
                 </div>

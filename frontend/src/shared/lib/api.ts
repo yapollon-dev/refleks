@@ -19,6 +19,7 @@ import {
   GetVersion as _GetVersion,
   LaunchKovaaksPlaylist as _LaunchKovaaksPlaylist,
   LaunchKovaaksScenario as _LaunchKovaaksScenario,
+  LaunchRecordingOBS as _LaunchRecordingOBS,
   QuitApp as _QuitApp,
   OpenRecording as _OpenRecording,
   PreviewRecordingCleanup as _PreviewRecordingCleanup,
@@ -31,6 +32,7 @@ import {
   SaveScenarioNote as _SaveScenarioNote,
   SaveSessionNote as _SaveSessionNote,
   SelectFFmpegPath as _SelectFFmpegPath,
+  SelectOBSExecutablePath as _SelectOBSExecutablePath,
   SelectRecordingDirectory as _SelectRecordingDirectory,
   SetAutostart as _SetAutostart,
   SetFavoriteBenchmarks as _SetFavoriteBenchmarks,
@@ -114,6 +116,11 @@ export async function startRecordingReplayBuffer(): Promise<RecordingRuntimeStat
   return res as unknown as RecordingRuntimeStatus
 }
 
+export async function launchRecordingOBS(): Promise<RecordingRuntimeStatus> {
+  const res = await _LaunchRecordingOBS()
+  return res as unknown as RecordingRuntimeStatus
+}
+
 export async function getRecordings(): Promise<RecordingRecord[]> {
   const res = await _GetRecordings()
   return (Array.isArray(res) ? res : []) as unknown as RecordingRecord[]
@@ -163,6 +170,11 @@ export async function selectRecordingDirectory(): Promise<string> {
 
 export async function selectFFmpegPath(): Promise<string> {
   const res = await _SelectFFmpegPath()
+  return String(res || '')
+}
+
+export async function selectOBSExecutablePath(): Promise<string> {
+  const res = await _SelectOBSExecutablePath()
   return String(res || '')
 }
 

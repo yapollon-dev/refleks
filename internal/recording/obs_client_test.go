@@ -23,19 +23,20 @@ import (
 )
 
 type fakeOBSServer struct {
-	server                   *httptest.Server
-	password                 string
-	salt                     string
-	challenge                string
-	replayActive             bool
-	requestError             bool
-	closeAfterHello          bool
-	replayPath               string
-	noReplayEvent            bool
-	replayEventAfterResponse bool
-	writeReplayOnSave        bool
-	saveReplayRequests       int
-	startReplayRequests      int
+	server                    *httptest.Server
+	password                  string
+	salt                      string
+	challenge                 string
+	replayActive              bool
+	requestError              bool
+	closeAfterHello           bool
+	replayPath                string
+	replayStatusNotReadyCount int
+	noReplayEvent             bool
+	replayEventAfterResponse  bool
+	writeReplayOnSave         bool
+	saveReplayRequests        int
+	startReplayRequests       int
 }
 
 func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServer {
@@ -118,8 +119,13 @@ func newFakeOBSServer(t *testing.T, configure func(*fakeOBSServer)) *fakeOBSServ
 						"obsWebSocketVersion": mustJSON("5.5.0"),
 					}
 				case "GetReplayBufferStatus":
-					response.ResponseData = map[string]json.RawMessage{
-						"outputActive": mustJSON(fake.replayActive),
+					if fake.replayStatusNotReadyCount > 0 {
+						fake.replayStatusNotReadyCount--
+						response.RequestStatus = obsRequestStatus{Result: false, Code: 500, Comment: "OBS is not ready to perform the request."}
+					} else {
+						response.ResponseData = map[string]json.RawMessage{
+							"outputActive": mustJSON(fake.replayActive),
+						}
 					}
 				case "StartReplayBuffer":
 					fake.startReplayRequests++

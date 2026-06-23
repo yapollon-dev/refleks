@@ -50,6 +50,9 @@ type RecordingSettings struct {
 	OBSPasswordSet        bool            `json:"obsPasswordSet,omitempty"`
 	AutoConnect           bool            `json:"autoConnect"`
 	AutoStartReplayBuffer bool            `json:"autoStartReplayBuffer"`
+	AutoLaunchOBS         bool            `json:"autoLaunchObs"`
+	LaunchOBSMinimized    bool            `json:"launchObsMinimizedToTray"`
+	OBSExecutablePath     string          `json:"obsExecutablePath,omitempty"`
 	SavePolicy            RecordingPolicy `json:"savePolicy"`
 	AlwaysSaveScenarios   []string        `json:"alwaysSaveScenarios,omitempty"`
 	NeverSaveScenarios    []string        `json:"neverSaveScenarios,omitempty"`
@@ -134,6 +137,12 @@ type RecordingRuntimeStatus struct {
 	OBSConnectionDetailsSaved    bool   `json:"obsConnectionDetailsSaved,omitempty"`
 	OBSWebSocketVerified         bool   `json:"obsWebSocketVerified,omitempty"`
 	LastConnectionTestSuccessful bool   `json:"lastConnectionTestSuccessful,omitempty"`
+	OBSProcessStatus             string `json:"obsProcessStatus,omitempty"`
+	OBSLaunchStatus              string `json:"obsLaunchStatus,omitempty"`
+	OBSLaunchPath                string `json:"obsLaunchPath,omitempty"`
+	OBSLaunchCheckedAt           string `json:"obsLaunchCheckedAt,omitempty"`
+	OBSLaunchLastError           string `json:"obsLaunchLastError,omitempty"`
+	OBSLaunchedByRefleks         bool   `json:"obsLaunchedByRefleks,omitempty"`
 	FFmpegStatus                 string `json:"ffmpegStatus,omitempty"`
 	FFmpegSource                 string `json:"ffmpegSource,omitempty"`
 	FFmpegPath                   string `json:"ffmpegPath,omitempty"`

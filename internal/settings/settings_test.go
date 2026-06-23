@@ -25,6 +25,12 @@ func TestDefaultRecordingSettings(t *testing.T) {
 	if !got.AutoConnect || !got.AutoStartReplayBuffer {
 		t.Fatalf("auto connect and auto-start replay buffer should default to true")
 	}
+	if !got.AutoLaunchOBS || !got.LaunchOBSMinimized {
+		t.Fatalf("auto-launch OBS and minimized launch should default to true")
+	}
+	if got.OBSExecutablePath != "" {
+		t.Fatalf("custom OBS executable path should default to empty")
+	}
 	if got.PreRollSeconds != constants.DefaultRecordingPreRollSeconds || got.PostRollSeconds != constants.DefaultRecordingPostRollSeconds {
 		t.Fatalf("pre/post roll = %d/%d, want %d/%d", got.PreRollSeconds, got.PostRollSeconds, constants.DefaultRecordingPreRollSeconds, constants.DefaultRecordingPostRollSeconds)
 	}
@@ -61,6 +67,9 @@ func TestSanitizeRecordingSettingsAppliesDefaults(t *testing.T) {
 	if got.PreRollSeconds != constants.DefaultRecordingPreRollSeconds || got.PostRollSeconds != constants.DefaultRecordingPostRollSeconds {
 		t.Fatalf("pre/post roll should be defaulted, got %d/%d", got.PreRollSeconds, got.PostRollSeconds)
 	}
+	if !got.AutoLaunchOBS || !got.LaunchOBSMinimized {
+		t.Fatalf("auto-launch OBS settings should be defaulted to true")
+	}
 }
 
 func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
@@ -69,14 +78,17 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 		OBSPort:               4456,
 		AutoConnect:           false,
 		AutoStartReplayBuffer: false,
+		AutoLaunchOBS:         false,
+		LaunchOBSMinimized:    false,
 		SavePolicy:            models.RecordingPolicyNewPB,
 		FFmpegPath:            "C:/tools/ffmpeg/bin",
+		OBSExecutablePath:     "C:/obs/bin/64bit/obs64.exe",
 		RecordingDir:          "C:/clips",
 		StorageLimitGB:        10,
 		MinFreeSpaceGB:        2,
 	})
 
-	if got.AutoConnect || got.AutoStartReplayBuffer {
+	if got.AutoConnect || got.AutoStartReplayBuffer || got.AutoLaunchOBS || got.LaunchOBSMinimized {
 		t.Fatalf("explicit false recording booleans should be preserved")
 	}
 	if got.RecordingDir != filepath.Clean("C:/clips") {
@@ -84,6 +96,9 @@ func TestSanitizeRecordingSettingsPreservesExplicitFalseBooleans(t *testing.T) {
 	}
 	if got.FFmpegPath != filepath.Clean("C:/tools/ffmpeg/bin") {
 		t.Fatalf("ffmpeg path = %q, want cleaned path", got.FFmpegPath)
+	}
+	if got.OBSExecutablePath != filepath.Clean("C:/obs/bin/64bit/obs64.exe") {
+		t.Fatalf("OBS executable path = %q, want cleaned path", got.OBSExecutablePath)
 	}
 }
 

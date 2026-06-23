@@ -56,6 +56,8 @@ func DefaultRecordingSettings() models.RecordingSettings {
 		OBSPort:               constants.DefaultOBSPort,
 		AutoConnect:           true,
 		AutoStartReplayBuffer: true,
+		AutoLaunchOBS:         true,
+		LaunchOBSMinimized:    true,
 		SavePolicy:            models.RecordingPolicyEveryRun,
 		RecordingDir:          DefaultRecordingDir(),
 		StorageLimitGB:        constants.DefaultRecordingStorageLimitGB,
@@ -154,6 +156,9 @@ func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSetti
 	if strings.TrimSpace(r.FFmpegPath) != "" {
 		r.FFmpegPath = filepath.Clean(ExpandPathPlaceholders(r.FFmpegPath))
 	}
+	if strings.TrimSpace(r.OBSExecutablePath) != "" {
+		r.OBSExecutablePath = filepath.Clean(ExpandPathPlaceholders(r.OBSExecutablePath))
+	}
 	if r.StorageLimitGB <= 0 {
 		r.StorageLimitGB = defaults.StorageLimitGB
 	}
@@ -190,6 +195,9 @@ func recordingSettingsAbsent(r models.RecordingSettings) bool {
 		!r.OBSPasswordSet &&
 		!r.AutoConnect &&
 		!r.AutoStartReplayBuffer &&
+		!r.AutoLaunchOBS &&
+		!r.LaunchOBSMinimized &&
+		strings.TrimSpace(r.OBSExecutablePath) == "" &&
 		strings.TrimSpace(string(r.SavePolicy)) == "" &&
 		len(r.AlwaysSaveScenarios) == 0 &&
 		len(r.NeverSaveScenarios) == 0 &&

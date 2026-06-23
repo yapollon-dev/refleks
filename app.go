@@ -67,6 +67,7 @@ func (a *App) startup(ctx context.Context) {
 			a.emitRecordingsChanged()
 			a.emitRecordingStatusChanged()
 		})
+		a.recordingSvc.SetOnStatusChanged(a.emitRecordingStatusChanged)
 	} else {
 		runtime.LogWarning(a.ctx, "recording service init failed: "+err.Error())
 	}
@@ -93,7 +94,7 @@ func (a *App) startup(ctx context.Context) {
 				}
 			}()
 		})
-		a.ensureRecordingReplayBufferReadyAsync()
+		a.prepareRecordingOBSAsync()
 	}
 
 	// Initialize Autostart Service
@@ -320,6 +321,23 @@ func (a *App) StartRecordingReplayBuffer() models.RecordingRuntimeStatus {
 	return status
 }
 
+// LaunchRecordingOBS starts OBS if needed, then tries to connect through the configured WebSocket.
+func (a *App) LaunchRecordingOBS() models.RecordingRuntimeStatus {
+	if a.recordingSvc == nil {
+		return models.RecordingRuntimeStatus{
+			ConnectionStatus:     "not_connected",
+			ReplayBufferStatus:   "unknown",
+			OBSLaunchStatus:      "launch_failed",
+			OBSLaunchLastError:   "recording service is not initialized",
+			LastConnectionStatus: "error",
+			LastError:            "recording service is not initialized",
+		}
+	}
+	status := a.recordingSvc.LaunchOBS(a.ctx)
+	a.emitRecordingStatusChanged()
+	return status
+}
+
 // SaveCurrentReplay manually saves the current OBS replay buffer, optionally linked to an explicitly selected run.
 func (a *App) SaveCurrentReplay(runID string) (models.RecordingRecord, error) {
 	if a.recordingSvc == nil {
@@ -465,6 +483,19 @@ func (a *App) SelectFFmpegPath() (string, error) {
 		Filters: []runtime.FileFilter{
 			{
 				DisplayName: "FFmpeg executable",
+				Pattern:     "*.exe",
+			},
+		},
+	})
+}
+
+// SelectOBSExecutablePath opens a native file picker for a custom OBS executable path.
+func (a *App) SelectOBSExecutablePath() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Choose obs64.exe",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "OBS executable",
 				Pattern:     "*.exe",
 			},
 		},
@@ -634,6 +665,28 @@ func (a *App) ensureRecordingReplayBufferReadyAsync() {
 		status := a.recordingSvc.EnsureReplayBufferStarted(a.ctx)
 		if status.LastError != "" {
 			runtime.LogWarningf(a.ctx, "recording replay buffer auto-start failed: %s", status.LastError)
+		}
+		a.emitRecordingStatusChanged()
+	}()
+}
+
+func (a *App) prepareRecordingOBSAsync() {
+	if a.recordingSvc == nil || a.ctx == nil || a.settingsSvc == nil {
+		return
+	}
+	recordingSettings := a.settingsSvc.Get().Recording
+	if !recordingSettings.Enabled || !recordingSettings.AutoConnect {
+		return
+	}
+	go func() {
+		var status models.RecordingRuntimeStatus
+		if recordingSettings.AutoLaunchOBS {
+			status = a.recordingSvc.PrepareOBSOnStartup(a.ctx)
+		} else if recordingSettings.AutoStartReplayBuffer {
+			status = a.recordingSvc.EnsureReplayBufferStarted(a.ctx)
+		}
+		if status.LastError != "" || status.OBSLaunchLastError != "" {
+			runtime.LogWarningf(a.ctx, "recording OBS startup preparation warning: %s %s", status.LastError, status.OBSLaunchLastError)
 		}
 		a.emitRecordingStatusChanged()
 	}()

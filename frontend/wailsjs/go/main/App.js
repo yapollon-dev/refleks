@@ -82,6 +82,10 @@ export function LaunchKovaaksScenario(arg1, arg2) {
   return window['go']['main']['App']['LaunchKovaaksScenario'](arg1, arg2);
 }
 
+export function LaunchRecordingOBS() {
+  return window['go']['main']['App']['LaunchRecordingOBS']();
+}
+
 export function OpenRecording(arg1) {
   return window['go']['main']['App']['OpenRecording'](arg1);
 }
@@ -132,6 +136,10 @@ export function SaveSessionNote(arg1, arg2, arg3) {
 
 export function SelectFFmpegPath() {
   return window['go']['main']['App']['SelectFFmpegPath']();
+}
+
+export function SelectOBSExecutablePath() {
+  return window['go']['main']['App']['SelectOBSExecutablePath']();
 }
 
 export function SelectRecordingDirectory() {

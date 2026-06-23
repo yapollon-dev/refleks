@@ -65,13 +65,36 @@ Portable or custom OBS installations may not be detected by the installer, but t
 
 OBS must be running and reachable for recordings to work.
 
-When Auto Connect and Auto-start Replay Buffer are enabled, RefleK's attempts to prepare the replay buffer when the app starts and when recording settings are updated.
+### Automatic OBS Launch
+
+RefleK's can launch OBS automatically as a recording startup helper. This is enabled by default, but it only runs when **Auto Recording** and **Auto Connect** are also enabled.
+
+Auto-launch behavior:
+
+* RefleK's checks whether OBS is already running before launch.
+* RefleK's never starts a second OBS instance when one is already running.
+* RefleK's attempts automatic launch only once per app startup.
+* If the user closes OBS later, RefleK's does not continuously relaunch it.
+* RefleK's never closes OBS when RefleK's exits.
+* OBS launch, WebSocket, authentication or replay-buffer failures do not block the rest of the app.
+
+By default, RefleK's launches OBS with `--minimize-to-tray`, using the OBS executable folder as the working directory. OBS launch parameters are documented by OBS at <https://obsproject.com/kb/launch-parameters>.
+
+If no custom executable is configured, RefleK's tries common Windows OBS install locations. Portable and custom OBS installs may not be detected automatically; set the OBS executable path in Settings to use them. The WebSocket host, port and password settings still control which OBS instance RefleK's connects to.
+
+After launching OBS, RefleK's waits briefly for OBS to initialize and retries WebSocket connection for up to 60 seconds. If Auto-start Replay Buffer is enabled, RefleK's starts the replay buffer through OBS WebSocket after connecting. It does not rely on OBS command-line arguments for replay-buffer state.
+
+Use **Launch OBS** in Settings to run the same launch/connect preparation manually.
+
+When Auto Connect and Auto-start Replay Buffer are enabled, RefleK's attempts to prepare the replay buffer when the app starts and when recording settings are updated. If Auto-launch OBS is enabled, the startup preparation may launch OBS once before connecting.
 
 Testing the OBS connection only checks authentication, OBS version and replay-buffer status. It does not start the replay buffer. Use the separate start action or start it manually in OBS.
 
 The dependency status in Settings distinguishes:
 
 * OBS installed or missing.
+* OBS process running or not running.
+* OBS launch status, including launched by RefleK's, executable not found, launch failed or waiting for WebSocket.
 * OBS connection details saved in RefleK's.
 * OBS WebSocket verified by the last successful connection test.
 * Replay buffer active or inactive.
@@ -206,6 +229,10 @@ In those cases, the recording remains linked to the run but is not presented as 
 
 * **Authentication failed:** Verify the OBS WebSocket password in Settings.
 * **Connection failed or was lost:** Start OBS, enable the WebSocket server and verify the host and port.
+* **OBS executable not found:** Install OBS Studio or set the OBS executable path in Settings for a portable/custom install.
+* **OBS launch failed:** Check the configured OBS executable path and permissions. Start OBS manually and use Test OBS Connection to isolate WebSocket issues.
+* **Waiting for OBS WebSocket:** OBS may still be starting, WebSocket may be disabled, or host/port/password may be wrong.
+* **OBS already running but options did not apply:** RefleK's does not restart an already running OBS instance. Change OBS launch options manually or restart OBS yourself.
 * **Replay buffer inactive:** Start it manually or enable Auto-start Replay Buffer.
 * **OBS did not confirm a new replay:** Confirm that replay-buffer saving works directly inside OBS.
 * **Recording is marked truncated:** Increase the OBS replay-buffer duration so it includes the full scenario, detection delay, pre-roll and post-roll.

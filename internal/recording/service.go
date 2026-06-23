@@ -19,13 +19,15 @@ import (
 )
 
 type Service struct {
-	mu          sync.RWMutex
-	saveMu      sync.Mutex
-	settingsSvc *appsettings.Service
-	metadata    *MetadataStore
-	runStore    *runs.Store
-	lastStatus  models.RecordingRuntimeStatus
-	onChanged   func()
+	mu              sync.RWMutex
+	saveMu          sync.Mutex
+	settingsSvc     *appsettings.Service
+	metadata        *MetadataStore
+	runStore        *runs.Store
+	lastStatus      models.RecordingRuntimeStatus
+	onChanged       func()
+	onStatusChanged func()
+	obsStartupOnce  sync.Once
 }
 
 var errRecordingAlreadyExists = errors.New("recording already exists for this run")
@@ -53,6 +55,15 @@ func (s *Service) SetOnChanged(fn func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onChanged = fn
+}
+
+func (s *Service) SetOnStatusChanged(fn func()) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onStatusChanged = fn
 }
 
 func (s *Service) notifyChanged() {
@@ -121,6 +132,12 @@ func (s *Service) Status() models.RecordingRuntimeStatus {
 		status.OBSWebSocketVersion = last.OBSWebSocketVersion
 		status.OBSWebSocketVerified = last.OBSWebSocketVerified
 		status.LastConnectionTestSuccessful = last.LastConnectionTestSuccessful
+		status.OBSProcessStatus = last.OBSProcessStatus
+		status.OBSLaunchStatus = last.OBSLaunchStatus
+		status.OBSLaunchPath = last.OBSLaunchPath
+		status.OBSLaunchCheckedAt = last.OBSLaunchCheckedAt
+		status.OBSLaunchLastError = last.OBSLaunchLastError
+		status.OBSLaunchedByRefleks = last.OBSLaunchedByRefleks
 		status.LastError = last.LastError
 	}
 	return status
@@ -804,8 +821,12 @@ func (s *Service) cacheStatus(status models.RecordingRuntimeStatus) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.lastStatus = status
+	fn := s.onStatusChanged
+	s.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 func classifyConnectionError(err error) string {

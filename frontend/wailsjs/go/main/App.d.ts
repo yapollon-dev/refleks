@@ -42,6 +42,8 @@ export function LaunchKovaaksPlaylist(arg1:string):Promise<void>;
 
 export function LaunchKovaaksScenario(arg1:string,arg2:string):Promise<void>;
 
+export function LaunchRecordingOBS():Promise<models.RecordingRuntimeStatus>;
+
 export function OpenRecording(arg1:string):Promise<void>;
 
 export function PreviewRecordingCleanup():Promise<models.RecordingCleanupPreview>;
@@ -67,6 +69,8 @@ export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<vo
 export function SaveSessionNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SelectFFmpegPath():Promise<string>;
+
+export function SelectOBSExecutablePath():Promise<string>;
 
 export function SelectRecordingDirectory():Promise<string>;
 
