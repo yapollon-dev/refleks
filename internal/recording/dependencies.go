@@ -26,7 +26,7 @@ const (
 	ffmpegSourceBundled = "bundled"
 	ffmpegSourcePath    = "path"
 
-	ffmpegCapabilityCacheVersion = "trim-encoder-v2"
+	ffmpegCapabilityCacheVersion = "trim-seek-v3"
 )
 
 type ffmpegInspection struct {
@@ -302,6 +302,7 @@ func validateFFmpegCandidate(candidate ffmpegCandidate) ffmpegInspection {
 		"trim_encoder:" + toolchain.TrimVideoEncoder,
 		"aac",
 		"optional_audio_map",
+		"seek_keyframes_2s",
 		"faststart",
 	}, ",")
 	inspection.Error = ""
@@ -382,7 +383,7 @@ func selectTrimEncoder(ctx context.Context, toolchain videoToolchain, source str
 			"-map", "0:a?",
 		}
 		args = append(args, encoder.Args...)
-		args = append(args, "-c:a", "aac", "-movflags", "+faststart", trimmed)
+		args = append(args, trimSharedOutputArgs(trimmed)...)
 		if err := runVideoCommand(ctx, toolchain.FFmpeg, args...); err != nil {
 			failures = append(failures, encoder.Name+": "+err.Error())
 			_ = os.Remove(trimmed)

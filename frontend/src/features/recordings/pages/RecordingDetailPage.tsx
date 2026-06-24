@@ -14,8 +14,15 @@ import { DeleteRecordingModal } from '../components/DeleteRecordingModal'
 import { RecordingVideoPlayer } from '../components/RecordingVideoPlayer'
 import { formatBytes, formatLabel, recordingTitle } from '../lib/recordingFormat'
 
-function recordingVideoURL(id: string): string {
-  return `/recording-video/${encodeURIComponent(id)}`
+function recordingVideoURL(recording: RecordingRecord): string {
+  const version = [
+    recording.updatedAt,
+    recording.sizeBytes,
+    recording.videoPath,
+    recording.activeVideoKind,
+    recording.trimStatus,
+  ].filter(Boolean).join('|')
+  return `/recording-video/${encodeURIComponent(recording.id)}?v=${encodeURIComponent(version)}`
 }
 
 function formatDate(value?: string): string {
@@ -60,7 +67,7 @@ export function RecordingDetailPage() {
   }, [load])
 
   const canUseVideo = !!recording?.videoPath && recording.status !== 'missing'
-  const videoURL = useMemo(() => (canUseVideo && recording ? recordingVideoURL(recording.id) : ''), [canUseVideo, recording])
+  const videoURL = useMemo(() => (canUseVideo && recording ? recordingVideoURL(recording) : ''), [canUseVideo, recording])
 
   const handleBack = () => {
     navigate('/recordings')

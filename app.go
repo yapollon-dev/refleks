@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -407,10 +410,38 @@ func (a *App) serveRecordingVideo(w http.ResponseWriter, r *http.Request, id str
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	if err := serveLocalVideoFile(w, r, path); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+	}
+}
+
+// serveLocalVideoFile serves recording files with explicit range and cache semantics for WebView seeking.
+func serveLocalVideoFile(w http.ResponseWriter, r *http.Request, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s is a directory", filepath.Base(path))
+	}
+
+	contentType := mime.TypeByExtension(filepath.Ext(path))
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-	w.Header().Set("Content-Disposition", "inline")
-	http.ServeFile(w, r, path)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": filepath.Base(path)}))
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), file)
+	return nil
 }
 
 // SetRecordingProtected updates the cleanup protection flag for a recording.

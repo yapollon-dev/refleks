@@ -75,11 +75,7 @@ func defaultTrimReplayVideo(ctx context.Context, toolchain videoToolchain, sourc
 		"-map", "0:a?",
 	)
 	cmd.Args = append(cmd.Args, encoder.Args...)
-	cmd.Args = append(cmd.Args,
-		"-c:a", "aac",
-		"-movflags", "+faststart",
-		targetPath,
-	)
+	cmd.Args = append(cmd.Args, trimSharedOutputArgs(targetPath)...)
 	configureVideoCommand(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -159,6 +155,16 @@ func trimEncoderConfigFor(name string) trimEncoderConfig {
 		}
 	}
 	return defaultTrimEncoderConfig()
+}
+
+// trimSharedOutputArgs keeps generated clips browser-seekable while preserving exact re-encoded boundaries.
+func trimSharedOutputArgs(targetPath string) []string {
+	return []string{
+		"-force_key_frames", "expr:gte(t,n_forced*2)",
+		"-c:a", "aac",
+		"-movflags", "+faststart",
+		targetPath,
+	}
 }
 
 func trimTimeout(duration time.Duration) time.Duration {

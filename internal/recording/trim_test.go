@@ -20,3 +20,17 @@ func TestTrimEncoderConfigForFallsBackToCPUEncoder(t *testing.T) {
 		}
 	}
 }
+
+func TestTrimSharedOutputArgsIncludesSeekKeyframes(t *testing.T) {
+	args := trimSharedOutputArgs("clip.mp4")
+	found := false
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-force_key_frames" && args[i+1] == "expr:gte(t,n_forced*2)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("trim args = %#v, want forced seek keyframes", args)
+	}
+}
