@@ -26,6 +26,7 @@ type RuntimeService struct {
 	settingsSvc     *appsettings.Service
 	benchmarkSvc    *benchmarks.Service
 	runStore        *Store
+	onRunParsed     func(models.RunRecord)
 	procWatcher     *process.Watcher
 	procWatcherStop context.CancelFunc
 }
@@ -149,6 +150,10 @@ func (s *RuntimeService) IsWatcherRunning() bool {
 	return s.watcher.IsRunning()
 }
 
+func (s *RuntimeService) SetOnRunParsed(fn func(models.RunRecord)) {
+	s.onRunParsed = fn
+}
+
 func (s *RuntimeService) UpdateSettings(newS models.Settings) error {
 	return s.OverwriteSettings(newS)
 }
@@ -252,6 +257,9 @@ func (s *RuntimeService) SaveSessionNote(sessionID, name, notes string) error {
 }
 
 func (s *RuntimeService) handleRunParsed(rec models.RunRecord) {
+	if s.onRunParsed != nil {
+		s.onRunParsed(rec)
+	}
 	s.benchmarkSvc.CheckAndRefreshIfNeeded(rec)
 	settings := s.settingsSvc.Get()
 	if !settings.RunSyncEnabled {

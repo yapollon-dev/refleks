@@ -361,6 +361,330 @@ export namespace models {
 	
 	
 	
+	export class RecordingCleanupItem {
+	    id: string;
+	    scenario: string;
+	    videoPath: string;
+	    sizeBytes: number;
+	    keepReason: string;
+	    createdAt: string;
+	    protected: boolean;
+	    pbAtSave: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecordingCleanupItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.scenario = source["scenario"];
+	        this.videoPath = source["videoPath"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.keepReason = source["keepReason"];
+	        this.createdAt = source["createdAt"];
+	        this.protected = source["protected"];
+	        this.pbAtSave = source["pbAtSave"];
+	    }
+	}
+	export class RecordingCleanupPreview {
+	    totalSizeBytes: number;
+	    storageLimitBytes: number;
+	    minFreeSpaceBytes: number;
+	    freeSpaceBytes: number;
+	    requiredBytes: number;
+	    reclaimableBytes: number;
+	    plannedDeleteBytes: number;
+	    plannedDeleteCount: number;
+	    eligibleCount: number;
+	    excludedProtectedCount: number;
+	    excludedPbCount: number;
+	    excludedUnavailableCount: number;
+	    willMeetLimits: boolean;
+	    reason: string;
+	    items: RecordingCleanupItem[];
+	    deletedCount: number;
+	    deletedBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecordingCleanupPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalSizeBytes = source["totalSizeBytes"];
+	        this.storageLimitBytes = source["storageLimitBytes"];
+	        this.minFreeSpaceBytes = source["minFreeSpaceBytes"];
+	        this.freeSpaceBytes = source["freeSpaceBytes"];
+	        this.requiredBytes = source["requiredBytes"];
+	        this.reclaimableBytes = source["reclaimableBytes"];
+	        this.plannedDeleteBytes = source["plannedDeleteBytes"];
+	        this.plannedDeleteCount = source["plannedDeleteCount"];
+	        this.eligibleCount = source["eligibleCount"];
+	        this.excludedProtectedCount = source["excludedProtectedCount"];
+	        this.excludedPbCount = source["excludedPbCount"];
+	        this.excludedUnavailableCount = source["excludedUnavailableCount"];
+	        this.willMeetLimits = source["willMeetLimits"];
+	        this.reason = source["reason"];
+	        this.items = this.convertValues(source["items"], RecordingCleanupItem);
+	        this.deletedCount = source["deletedCount"];
+	        this.deletedBytes = source["deletedBytes"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RecordingRecord {
+	    id: string;
+	    runId: string;
+	    runFileName: string;
+	    runFilePath: string;
+	    scenario: string;
+	    score: number;
+	    playedAt?: string;
+	    keepReason: string;
+	    linkSource?: string;
+	    obsSourcePath?: string;
+	    runImportedAt?: string;
+	    captureRequestedAt?: string;
+	    captureConfirmedAt?: string;
+	    captureDelayMs?: number;
+	    replayBufferStatusAtSave?: string;
+	    obsReplayFileModTime?: string;
+	    videoPath: string;
+	    sizeBytes: number;
+	    rawVideoPath?: string;
+	    rawSizeBytes?: number;
+	    trimmedVideoPath?: string;
+	    trimmedSizeBytes?: number;
+	    activeVideoKind?: string;
+	    trimStatus?: string;
+	    timingSource?: string;
+	    scenarioStartAt?: string;
+	    scenarioEndAt?: string;
+	    requestedClipStartAt?: string;
+	    requestedClipEndAt?: string;
+	    actualClipStartAt?: string;
+	    actualClipEndAt?: string;
+	    replayTimelineStartAt?: string;
+	    replayTimelineEndAt?: string;
+	    replayDurationMs?: number;
+	    clipStartOffsetMs?: number;
+	    clipDurationMs?: number;
+	    preRollSeconds?: number;
+	    postRollSeconds?: number;
+	    trimTruncatedStart?: boolean;
+	    trimTruncatedEnd?: boolean;
+	    status: string;
+	    protected: boolean;
+	    pbAtSave: boolean;
+	    createdAt: string;
+	    updatedAt: string;
+	    lastError?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecordingRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.runId = source["runId"];
+	        this.runFileName = source["runFileName"];
+	        this.runFilePath = source["runFilePath"];
+	        this.scenario = source["scenario"];
+	        this.score = source["score"];
+	        this.playedAt = source["playedAt"];
+	        this.keepReason = source["keepReason"];
+	        this.linkSource = source["linkSource"];
+	        this.obsSourcePath = source["obsSourcePath"];
+	        this.runImportedAt = source["runImportedAt"];
+	        this.captureRequestedAt = source["captureRequestedAt"];
+	        this.captureConfirmedAt = source["captureConfirmedAt"];
+	        this.captureDelayMs = source["captureDelayMs"];
+	        this.replayBufferStatusAtSave = source["replayBufferStatusAtSave"];
+	        this.obsReplayFileModTime = source["obsReplayFileModTime"];
+	        this.videoPath = source["videoPath"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.rawVideoPath = source["rawVideoPath"];
+	        this.rawSizeBytes = source["rawSizeBytes"];
+	        this.trimmedVideoPath = source["trimmedVideoPath"];
+	        this.trimmedSizeBytes = source["trimmedSizeBytes"];
+	        this.activeVideoKind = source["activeVideoKind"];
+	        this.trimStatus = source["trimStatus"];
+	        this.timingSource = source["timingSource"];
+	        this.scenarioStartAt = source["scenarioStartAt"];
+	        this.scenarioEndAt = source["scenarioEndAt"];
+	        this.requestedClipStartAt = source["requestedClipStartAt"];
+	        this.requestedClipEndAt = source["requestedClipEndAt"];
+	        this.actualClipStartAt = source["actualClipStartAt"];
+	        this.actualClipEndAt = source["actualClipEndAt"];
+	        this.replayTimelineStartAt = source["replayTimelineStartAt"];
+	        this.replayTimelineEndAt = source["replayTimelineEndAt"];
+	        this.replayDurationMs = source["replayDurationMs"];
+	        this.clipStartOffsetMs = source["clipStartOffsetMs"];
+	        this.clipDurationMs = source["clipDurationMs"];
+	        this.preRollSeconds = source["preRollSeconds"];
+	        this.postRollSeconds = source["postRollSeconds"];
+	        this.trimTruncatedStart = source["trimTruncatedStart"];
+	        this.trimTruncatedEnd = source["trimTruncatedEnd"];
+	        this.status = source["status"];
+	        this.protected = source["protected"];
+	        this.pbAtSave = source["pbAtSave"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.lastError = source["lastError"];
+	    }
+	}
+	export class RecordingRuntimeStatus {
+	    enabled: boolean;
+	    recordingDir: string;
+	    metadataPath: string;
+	    totalRecordings: number;
+	    totalSizeBytes: number;
+	    storageLimitBytes: number;
+	    minFreeSpaceBytes: number;
+	    freeSpaceBytes: number;
+	    connectionStatus: string;
+	    replayBufferStatus: string;
+	    lastConnectionStatus?: string;
+	    lastConnectionCheckedAt?: string;
+	    lastReplayBufferStatus?: string;
+	    obsVersion?: string;
+	    obsWebSocketVersion?: string;
+	    obsInstallStatus?: string;
+	    obsInstallPath?: string;
+	    obsInstallVersion?: string;
+	    obsConnectionDetailsSaved?: boolean;
+	    obsWebSocketVerified?: boolean;
+	    lastConnectionTestSuccessful?: boolean;
+	    obsProcessStatus?: string;
+	    obsLaunchStatus?: string;
+	    obsLaunchPath?: string;
+	    obsLaunchCheckedAt?: string;
+	    obsLaunchLastError?: string;
+	    obsLaunchedByRefleks?: boolean;
+	    ffmpegStatus?: string;
+	    ffmpegSource?: string;
+	    ffmpegPath?: string;
+	    ffmpegVersion?: string;
+	    ffprobeVersion?: string;
+	    ffmpegCapabilities?: string;
+	    ffmpegError?: string;
+	    lastError?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecordingRuntimeStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.recordingDir = source["recordingDir"];
+	        this.metadataPath = source["metadataPath"];
+	        this.totalRecordings = source["totalRecordings"];
+	        this.totalSizeBytes = source["totalSizeBytes"];
+	        this.storageLimitBytes = source["storageLimitBytes"];
+	        this.minFreeSpaceBytes = source["minFreeSpaceBytes"];
+	        this.freeSpaceBytes = source["freeSpaceBytes"];
+	        this.connectionStatus = source["connectionStatus"];
+	        this.replayBufferStatus = source["replayBufferStatus"];
+	        this.lastConnectionStatus = source["lastConnectionStatus"];
+	        this.lastConnectionCheckedAt = source["lastConnectionCheckedAt"];
+	        this.lastReplayBufferStatus = source["lastReplayBufferStatus"];
+	        this.obsVersion = source["obsVersion"];
+	        this.obsWebSocketVersion = source["obsWebSocketVersion"];
+	        this.obsInstallStatus = source["obsInstallStatus"];
+	        this.obsInstallPath = source["obsInstallPath"];
+	        this.obsInstallVersion = source["obsInstallVersion"];
+	        this.obsConnectionDetailsSaved = source["obsConnectionDetailsSaved"];
+	        this.obsWebSocketVerified = source["obsWebSocketVerified"];
+	        this.lastConnectionTestSuccessful = source["lastConnectionTestSuccessful"];
+	        this.obsProcessStatus = source["obsProcessStatus"];
+	        this.obsLaunchStatus = source["obsLaunchStatus"];
+	        this.obsLaunchPath = source["obsLaunchPath"];
+	        this.obsLaunchCheckedAt = source["obsLaunchCheckedAt"];
+	        this.obsLaunchLastError = source["obsLaunchLastError"];
+	        this.obsLaunchedByRefleks = source["obsLaunchedByRefleks"];
+	        this.ffmpegStatus = source["ffmpegStatus"];
+	        this.ffmpegSource = source["ffmpegSource"];
+	        this.ffmpegPath = source["ffmpegPath"];
+	        this.ffmpegVersion = source["ffmpegVersion"];
+	        this.ffprobeVersion = source["ffprobeVersion"];
+	        this.ffmpegCapabilities = source["ffmpegCapabilities"];
+	        this.ffmpegError = source["ffmpegError"];
+	        this.lastError = source["lastError"];
+	    }
+	}
+	export class RecordingSettings {
+	    enabled: boolean;
+	    obsHost: string;
+	    obsPort: number;
+	    obsPassword?: string;
+	    obsPasswordProtected?: string;
+	    obsPasswordSet?: boolean;
+	    autoConnect: boolean;
+	    autoStartReplayBuffer: boolean;
+	    autoLaunchObs: boolean;
+	    launchObsMinimizedToTray: boolean;
+	    obsExecutablePath?: string;
+	    savePolicy: string;
+	    alwaysSaveScenarios?: string[];
+	    neverSaveScenarios?: string[];
+	    ffmpegPath?: string;
+	    recordingDir: string;
+	    storageLimitGb: number;
+	    minFreeSpaceGb: number;
+	    autoCleanup: boolean;
+	    preRollSeconds: number;
+	    postRollSeconds: number;
+	    keepRawReplay: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecordingSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.obsHost = source["obsHost"];
+	        this.obsPort = source["obsPort"];
+	        this.obsPassword = source["obsPassword"];
+	        this.obsPasswordProtected = source["obsPasswordProtected"];
+	        this.obsPasswordSet = source["obsPasswordSet"];
+	        this.autoConnect = source["autoConnect"];
+	        this.autoStartReplayBuffer = source["autoStartReplayBuffer"];
+	        this.autoLaunchObs = source["autoLaunchObs"];
+	        this.launchObsMinimizedToTray = source["launchObsMinimizedToTray"];
+	        this.obsExecutablePath = source["obsExecutablePath"];
+	        this.savePolicy = source["savePolicy"];
+	        this.alwaysSaveScenarios = source["alwaysSaveScenarios"];
+	        this.neverSaveScenarios = source["neverSaveScenarios"];
+	        this.ffmpegPath = source["ffmpegPath"];
+	        this.recordingDir = source["recordingDir"];
+	        this.storageLimitGb = source["storageLimitGb"];
+	        this.minFreeSpaceGb = source["minFreeSpaceGb"];
+	        this.autoCleanup = source["autoCleanup"];
+	        this.preRollSeconds = source["preRollSeconds"];
+	        this.postRollSeconds = source["postRollSeconds"];
+	        this.keepRawReplay = source["keepRawReplay"];
+	    }
+	}
 	export class RunEnvironment {
 	    appVersion: string;
 	    os: string;
@@ -416,6 +740,7 @@ export namespace models {
 	    }
 	}
 	export class RunRecord {
+	    runId?: string;
 	    filePath: string;
 	    fileName: string;
 	    stats: Record<string, any>;
@@ -428,6 +753,7 @@ export namespace models {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.runId = source["runId"];
 	        this.filePath = source["filePath"];
 	        this.fileName = source["fileName"];
 	        this.stats = source["stats"];
@@ -499,6 +825,7 @@ export namespace models {
 	    autostartEnabled: boolean;
 	    anonymousEnabled: boolean;
 	    runSyncEnabled: boolean;
+	    recording: RecordingSettings;
 	    scenarioNotes?: Record<string, ScenarioNote>;
 	    sessionNotes?: Record<string, SessionNote>;
 	
@@ -524,6 +851,7 @@ export namespace models {
 	        this.autostartEnabled = source["autostartEnabled"];
 	        this.anonymousEnabled = source["anonymousEnabled"];
 	        this.runSyncEnabled = source["runSyncEnabled"];
+	        this.recording = this.convertValues(source["recording"], RecordingSettings);
 	        this.scenarioNotes = this.convertValues(source["scenarioNotes"], ScenarioNote, true);
 	        this.sessionNotes = this.convertValues(source["sessionNotes"], SessionNote, true);
 	    }

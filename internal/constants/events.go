@@ -13,4 +13,8 @@ const (
 	// Runs events
 	EventRunsWatcherStarted = "runs:watcher:started"
 	EventRunsAdded          = "runs:added"
+
+	// Recording events
+	EventRecordingsChanged      = "recordings:changed"
+	EventRecordingStatusChanged = "recording:status:changed"
 )

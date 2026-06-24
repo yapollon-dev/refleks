@@ -88,6 +88,7 @@ export type StatKey = keyof {
 }
 
 export interface RunRecord {
+  runId?: string
   filePath: string
   fileName: string
   stats: ScenarioStats
@@ -175,6 +176,163 @@ export interface BenchmarkProgress {
 
 import type { Font, Theme } from '../lib/theme'
 
+export type RecordingPolicy = 'every_run' | 'new_pb' | 'pb_and_ties' | 'top_three'
+export type RecordingKeepReason =
+  | 'every_run'
+  | 'manual_save'
+  | 'new_pb'
+  | 'pb_tie'
+  | 'top_three'
+  | 'always_save_scenario'
+  | 'never_save_scenario'
+export type RecordingStatusValue = 'pending' | 'saved' | 'failed' | 'missing' | 'skipped'
+export type RecordingLinkSource = 'auto_completed_run' | 'manual_user_selected' | 'unlinked'
+export type RecordingTrimStatus = 'not_applicable' | 'pending' | 'succeeded' | 'truncated' | 'failed'
+export type RecordingVideoKind = 'raw' | 'trimmed'
+
+export interface RecordingSettings {
+  enabled: boolean
+  obsHost: string
+  obsPort: number
+  obsPassword?: string
+  obsPasswordProtected?: string
+  obsPasswordSet?: boolean
+  autoConnect: boolean
+  autoStartReplayBuffer: boolean
+  autoLaunchObs: boolean
+  launchObsMinimizedToTray: boolean
+  obsExecutablePath?: string
+  savePolicy: RecordingPolicy
+  alwaysSaveScenarios?: string[]
+  neverSaveScenarios?: string[]
+  ffmpegPath?: string
+  recordingDir: string
+  storageLimitGb: number
+  minFreeSpaceGb: number
+  autoCleanup: boolean
+  preRollSeconds: number
+  postRollSeconds: number
+  keepRawReplay: boolean
+}
+
+export interface RecordingRecord {
+  id: string
+  runId: string
+  runFileName: string
+  runFilePath: string
+  scenario: string
+  score: number
+  playedAt?: string
+  keepReason: RecordingKeepReason
+  linkSource?: RecordingLinkSource
+  obsSourcePath?: string
+  runImportedAt?: string
+  captureRequestedAt?: string
+  captureConfirmedAt?: string
+  captureDelayMs?: number
+  replayBufferStatusAtSave?: string
+  obsReplayFileModTime?: string
+  videoPath: string
+  sizeBytes: number
+  rawVideoPath?: string
+  rawSizeBytes?: number
+  trimmedVideoPath?: string
+  trimmedSizeBytes?: number
+  activeVideoKind?: RecordingVideoKind
+  trimStatus?: RecordingTrimStatus
+  timingSource?: string
+  scenarioStartAt?: string
+  scenarioEndAt?: string
+  requestedClipStartAt?: string
+  requestedClipEndAt?: string
+  actualClipStartAt?: string
+  actualClipEndAt?: string
+  replayTimelineStartAt?: string
+  replayTimelineEndAt?: string
+  replayDurationMs?: number
+  clipStartOffsetMs?: number
+  clipDurationMs?: number
+  preRollSeconds?: number
+  postRollSeconds?: number
+  trimTruncatedStart?: boolean
+  trimTruncatedEnd?: boolean
+  status: RecordingStatusValue
+  protected: boolean
+  pbAtSave: boolean
+  createdAt: string
+  updatedAt: string
+  lastError?: string
+}
+
+export interface RecordingRuntimeStatus {
+  enabled: boolean
+  recordingDir: string
+  metadataPath: string
+  totalRecordings: number
+  totalSizeBytes: number
+  storageLimitBytes: number
+  minFreeSpaceBytes: number
+  freeSpaceBytes: number
+  connectionStatus: string
+  replayBufferStatus: string
+  lastConnectionStatus?: string
+  lastConnectionCheckedAt?: string
+  lastReplayBufferStatus?: string
+  obsVersion?: string
+  obsWebSocketVersion?: string
+  obsInstallStatus?: string
+  obsInstallPath?: string
+  obsInstallVersion?: string
+  obsConnectionDetailsSaved?: boolean
+  obsWebSocketVerified?: boolean
+  lastConnectionTestSuccessful?: boolean
+  obsProcessStatus?: string
+  obsLaunchStatus?: string
+  obsLaunchPath?: string
+  obsLaunchCheckedAt?: string
+  obsLaunchLastError?: string
+  obsLaunchedByRefleks?: boolean
+  ffmpegStatus?: string
+  ffmpegSource?: string
+  ffmpegPath?: string
+  ffmpegVersion?: string
+  ffprobeVersion?: string
+  ffmpegCapabilities?: string
+  ffmpegError?: string
+  lastError?: string
+}
+
+export interface RecordingCleanupItem {
+  id: string
+  scenario: string
+  videoPath: string
+  sizeBytes: number
+  keepReason: RecordingKeepReason
+  createdAt: string
+  protected: boolean
+  pbAtSave: boolean
+}
+
+export interface RecordingCleanupPreview {
+  totalSizeBytes: number
+  storageLimitBytes: number
+  minFreeSpaceBytes: number
+  freeSpaceBytes: number
+  requiredBytes: number
+  reclaimableBytes: number
+  plannedDeleteBytes: number
+  plannedDeleteCount: number
+  eligibleCount: number
+  excludedProtectedCount: number
+  excludedPbCount: number
+  excludedUnavailableCount: number
+  willMeetLimits: boolean
+  reason: string
+  items?: RecordingCleanupItem[]
+  deletedCount: number
+  deletedBytes: number
+}
+
 export interface Settings {
   steamInstallDir?: string
   kovaaksInstallDir: string
@@ -192,6 +350,7 @@ export interface Settings {
   autostartEnabled?: boolean
   anonymousEnabled?: boolean
   runSyncEnabled?: boolean
+  recording: RecordingSettings
   scenarioNotes?: Record<string, ScenarioNote>
   sessionNotes?: Record<string, SessionNote>
 }

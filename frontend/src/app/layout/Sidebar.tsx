@@ -2,7 +2,7 @@ import { DISCORD_SYMBOL, KO_FI_SYMBOL } from '@/assets'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { useAvailableUpdate, useBenchmarks } from '@/shared/hooks'
 import { benchmarkPath, cn, EXTERNAL_LINKS, getVersion, openURL } from '@/shared/lib'
-import { Activity, HelpCircle, LayoutGrid, PanelLeft, Settings, TrendingUp } from 'lucide-react'
+import { Activity, HelpCircle, LayoutGrid, PanelLeft, Settings, TrendingUp, Video } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -149,6 +149,7 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
     if (location.pathname.startsWith('/settings')) return null
     if (location.pathname.startsWith('/history')) return 1
     if (location.pathname.startsWith('/benchmarks')) return 2
+    if (location.pathname.startsWith('/recordings')) return 3
     return 0
   }, [location.pathname])
 
@@ -210,6 +211,14 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
               open={open}
               showActiveBackground={false}
               to={benchmarksTarget}
+            />
+            <SidebarItem
+              active={location.pathname.startsWith('/recordings')}
+              icon={<Video />}
+              label="Recordings"
+              open={open}
+              showActiveBackground={false}
+              to="/recordings"
             />
           </nav>
 

@@ -10,6 +10,10 @@ export function ClearCache() {
   return window['go']['main']['App']['ClearCache']();
 }
 
+export function DeleteRecording(arg1) {
+  return window['go']['main']['App']['DeleteRecording'](arg1);
+}
+
 export function DownloadAndInstallUpdate(arg1) {
   return window['go']['main']['App']['DownloadAndInstallUpdate'](arg1);
 }
@@ -42,6 +46,18 @@ export function GetRecentRuns(arg1) {
   return window['go']['main']['App']['GetRecentRuns'](arg1);
 }
 
+export function GetRecordingDirectory() {
+  return window['go']['main']['App']['GetRecordingDirectory']();
+}
+
+export function GetRecordingStatus() {
+  return window['go']['main']['App']['GetRecordingStatus']();
+}
+
+export function GetRecordings() {
+  return window['go']['main']['App']['GetRecordings']();
+}
+
 export function GetRunEvents(arg1) {
   return window['go']['main']['App']['GetRunEvents'](arg1);
 }
@@ -66,6 +82,18 @@ export function LaunchKovaaksScenario(arg1, arg2) {
   return window['go']['main']['App']['LaunchKovaaksScenario'](arg1, arg2);
 }
 
+export function LaunchRecordingOBS() {
+  return window['go']['main']['App']['LaunchRecordingOBS']();
+}
+
+export function OpenRecording(arg1) {
+  return window['go']['main']['App']['OpenRecording'](arg1);
+}
+
+export function PreviewRecordingCleanup() {
+  return window['go']['main']['App']['PreviewRecordingCleanup']();
+}
+
 export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }
@@ -74,8 +102,28 @@ export function RefreshAllBenchmarkProgresses() {
   return window['go']['main']['App']['RefreshAllBenchmarkProgresses']();
 }
 
+export function RefreshRecordingFiles() {
+  return window['go']['main']['App']['RefreshRecordingFiles']();
+}
+
 export function ResetSettings(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ResetSettings'](arg1, arg2, arg3, arg4);
+}
+
+export function RevealRecording(arg1) {
+  return window['go']['main']['App']['RevealRecording'](arg1);
+}
+
+export function RunRecordingCleanup() {
+  return window['go']['main']['App']['RunRecordingCleanup']();
+}
+
+export function SaveCurrentReplay(arg1) {
+  return window['go']['main']['App']['SaveCurrentReplay'](arg1);
+}
+
+export function SaveReplayForLatestRun() {
+  return window['go']['main']['App']['SaveReplayForLatestRun']();
 }
 
 export function SaveScenarioNote(arg1, arg2, arg3) {
@@ -86,6 +134,18 @@ export function SaveSessionNote(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveSessionNote'](arg1, arg2, arg3);
 }
 
+export function SelectFFmpegPath() {
+  return window['go']['main']['App']['SelectFFmpegPath']();
+}
+
+export function SelectOBSExecutablePath() {
+  return window['go']['main']['App']['SelectOBSExecutablePath']();
+}
+
+export function SelectRecordingDirectory() {
+  return window['go']['main']['App']['SelectRecordingDirectory']();
+}
+
 export function SetAutostart(arg1) {
   return window['go']['main']['App']['SetAutostart'](arg1);
 }
@@ -94,8 +154,16 @@ export function SetFavoriteBenchmarks(arg1) {
   return window['go']['main']['App']['SetFavoriteBenchmarks'](arg1);
 }
 
+export function SetRecordingProtected(arg1, arg2) {
+  return window['go']['main']['App']['SetRecordingProtected'](arg1, arg2);
+}
+
 export function ShowWindow() {
   return window['go']['main']['App']['ShowWindow']();
+}
+
+export function StartRecordingReplayBuffer() {
+  return window['go']['main']['App']['StartRecordingReplayBuffer']();
 }
 
 export function StartWatcher(arg1) {
@@ -104,6 +172,10 @@ export function StartWatcher(arg1) {
 
 export function StopWatcher() {
   return window['go']['main']['App']['StopWatcher']();
+}
+
+export function TestRecordingConnection() {
+  return window['go']['main']['App']['TestRecordingConnection']();
 }
 
 export function UpdateSettings(arg1) {

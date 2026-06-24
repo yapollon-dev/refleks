@@ -1,6 +1,7 @@
 package models
 
 type RunRecord struct {
+	RunID    string         `json:"runId,omitempty"`
 	FilePath string         `json:"filePath"`
 	FileName string         `json:"fileName"`
 	Stats    map[string]any `json:"stats"`

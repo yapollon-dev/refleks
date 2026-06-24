@@ -6,6 +6,8 @@ export function CheckForUpdates():Promise<models.UpdateInfo>;
 
 export function ClearCache():Promise<void>;
 
+export function DeleteRecording(arg1:string):Promise<void>;
+
 export function DownloadAndInstallUpdate(arg1:string):Promise<void>;
 
 export function GetAllBenchmarkProgresses():Promise<Record<number, models.BenchmarkProgress>>;
@@ -22,6 +24,12 @@ export function GetLastScenarioScores(arg1:string):Promise<Array<models.KovaaksL
 
 export function GetRecentRuns(arg1:number):Promise<Array<models.RunRecord>>;
 
+export function GetRecordingDirectory():Promise<string>;
+
+export function GetRecordingStatus():Promise<models.RecordingRuntimeStatus>;
+
+export function GetRecordings():Promise<Array<models.RecordingRecord>>;
+
 export function GetRunEvents(arg1:string):Promise<Array<any>>;
 
 export function GetRunTrace(arg1:string):Promise<string>;
@@ -34,24 +42,52 @@ export function LaunchKovaaksPlaylist(arg1:string):Promise<void>;
 
 export function LaunchKovaaksScenario(arg1:string,arg2:string):Promise<void>;
 
+export function LaunchRecordingOBS():Promise<models.RecordingRuntimeStatus>;
+
+export function OpenRecording(arg1:string):Promise<void>;
+
+export function PreviewRecordingCleanup():Promise<models.RecordingCleanupPreview>;
+
 export function QuitApp():Promise<void>;
 
 export function RefreshAllBenchmarkProgresses():Promise<Record<number, models.BenchmarkProgress>>;
 
+export function RefreshRecordingFiles():Promise<Array<models.RecordingRecord>>;
+
 export function ResetSettings(arg1:boolean,arg2:boolean,arg3:boolean,arg4:boolean):Promise<void>;
+
+export function RevealRecording(arg1:string):Promise<void>;
+
+export function RunRecordingCleanup():Promise<models.RecordingCleanupPreview>;
+
+export function SaveCurrentReplay(arg1:string):Promise<models.RecordingRecord>;
+
+export function SaveReplayForLatestRun():Promise<models.RecordingRecord>;
 
 export function SaveScenarioNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSessionNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SelectFFmpegPath():Promise<string>;
+
+export function SelectOBSExecutablePath():Promise<string>;
+
+export function SelectRecordingDirectory():Promise<string>;
+
 export function SetAutostart(arg1:boolean):Promise<void>;
 
 export function SetFavoriteBenchmarks(arg1:Array<string>):Promise<void>;
 
+export function SetRecordingProtected(arg1:string,arg2:boolean):Promise<models.RecordingRecord>;
+
 export function ShowWindow():Promise<void>;
+
+export function StartRecordingReplayBuffer():Promise<models.RecordingRuntimeStatus>;
 
 export function StartWatcher(arg1:string):Promise<void>;
 
 export function StopWatcher():Promise<void>;
+
+export function TestRecordingConnection():Promise<models.RecordingRuntimeStatus>;
 
 export function UpdateSettings(arg1:models.Settings):Promise<void>;

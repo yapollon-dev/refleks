@@ -1,0 +1,16 @@
+﻿FFmpeg for RefleK's
+
+Package: gyan.dev FFmpeg release essentials
+Version: 8.1.1
+Source revision: 239f2c733d
+Archive URL: https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.1-essentials_build.zip
+Archive SHA-256: 6f58ce889f59c311410f7d2b18895b33c03456463486f3b1ebc93d97a0f54541
+License: GPLv3
+Project source: https://git.ffmpeg.org/ffmpeg.git
+Download page: https://www.gyan.dev/ffmpeg/builds/
+
+Corresponding source:
+Use the source revision above from https://git.ffmpeg.org/ffmpeg.git and the build configuration recorded in THIRD_PARTY_NOTICES/ffmpeg/VERSION.txt.
+
+Packaging note:
+This script verifies that the required GPL packaging artifacts are present for the pinned FFmpeg package. It is a packaging checklist, not a legal determination.

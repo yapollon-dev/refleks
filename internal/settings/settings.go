@@ -39,6 +39,36 @@ func ResolveKovaaksStatsDir(installDir string) string {
 	return filepath.Join(installDir, constants.KovaaksDataDirName, constants.KovaaksStatsDirName)
 }
 
+// DefaultRecordingDir returns the local folder used for OBS replay files.
+func DefaultRecordingDir() string {
+	base, err := GetConfigDir()
+	if err != nil {
+		return filepath.Join(constants.ConfigDirName, constants.RecordingsSubdirName)
+	}
+	return filepath.Join(base, constants.RecordingsSubdirName)
+}
+
+// DefaultRecordingSettings returns recording defaults without enabling recording.
+func DefaultRecordingSettings() models.RecordingSettings {
+	return models.RecordingSettings{
+		Enabled:               false,
+		OBSHost:               constants.DefaultOBSHost,
+		OBSPort:               constants.DefaultOBSPort,
+		AutoConnect:           true,
+		AutoStartReplayBuffer: true,
+		AutoLaunchOBS:         true,
+		LaunchOBSMinimized:    true,
+		SavePolicy:            models.RecordingPolicyEveryRun,
+		RecordingDir:          DefaultRecordingDir(),
+		StorageLimitGB:        constants.DefaultRecordingStorageLimitGB,
+		MinFreeSpaceGB:        constants.DefaultRecordingMinFreeSpaceGB,
+		AutoCleanup:           false,
+		PreRollSeconds:        constants.DefaultRecordingPreRollSeconds,
+		PostRollSeconds:       constants.DefaultRecordingPostRollSeconds,
+		KeepRawReplay:         false,
+	}
+}
+
 // Default returns sane default settings for a fresh install.
 func Default() models.Settings {
 	return models.Settings{
@@ -54,6 +84,7 @@ func Default() models.Settings {
 		AutostartEnabled:     false,
 		AnonymousEnabled:     false,
 		RunSyncEnabled:       true,
+		Recording:            DefaultRecordingSettings(),
 		LastSeenVersion:      "",
 	}
 }
@@ -91,7 +122,93 @@ func Sanitize(s models.Settings) models.Settings {
 	if s.SessionNotes == nil {
 		s.SessionNotes = make(map[string]models.SessionNote)
 	}
+	s.Recording = SanitizeRecordingSettings(s.Recording)
 	return s
+}
+
+// SanitizeRecordingSettings applies defaults to missing recording fields while preserving explicit false booleans.
+func SanitizeRecordingSettings(r models.RecordingSettings) models.RecordingSettings {
+	defaults := DefaultRecordingSettings()
+	if recordingSettingsAbsent(r) {
+		return defaults
+	}
+	if strings.TrimSpace(r.OBSHost) == "" {
+		r.OBSHost = defaults.OBSHost
+	}
+	if r.OBSPort <= 0 {
+		r.OBSPort = defaults.OBSPort
+	}
+	switch {
+	case strings.TrimSpace(string(r.SavePolicy)) == "":
+		r.SavePolicy = defaults.SavePolicy
+	case string(r.SavePolicy) == "manual_only":
+		// Legacy manual-only meant "no automatic saves"; migrate it without enabling auto recording.
+		r.Enabled = false
+		r.SavePolicy = defaults.SavePolicy
+	case !validRecordingPolicy(r.SavePolicy):
+		r.SavePolicy = defaults.SavePolicy
+	}
+	if strings.TrimSpace(r.RecordingDir) == "" {
+		r.RecordingDir = defaults.RecordingDir
+	} else {
+		r.RecordingDir = filepath.Clean(ExpandPathPlaceholders(r.RecordingDir))
+	}
+	if strings.TrimSpace(r.FFmpegPath) != "" {
+		r.FFmpegPath = filepath.Clean(ExpandPathPlaceholders(r.FFmpegPath))
+	}
+	if strings.TrimSpace(r.OBSExecutablePath) != "" {
+		r.OBSExecutablePath = filepath.Clean(ExpandPathPlaceholders(r.OBSExecutablePath))
+	}
+	if r.StorageLimitGB <= 0 {
+		r.StorageLimitGB = defaults.StorageLimitGB
+	}
+	if r.MinFreeSpaceGB <= 0 {
+		r.MinFreeSpaceGB = defaults.MinFreeSpaceGB
+	}
+	if r.PreRollSeconds <= 0 {
+		r.PreRollSeconds = defaults.PreRollSeconds
+	}
+	if r.PostRollSeconds <= 0 {
+		r.PostRollSeconds = defaults.PostRollSeconds
+	}
+	if strings.TrimSpace(r.OBSPassword) != "" || strings.TrimSpace(r.OBSPasswordProtected) != "" {
+		r.OBSPasswordSet = true
+	}
+	return r
+}
+
+func validRecordingPolicy(policy models.RecordingPolicy) bool {
+	switch policy {
+	case models.RecordingPolicyEveryRun, models.RecordingPolicyNewPB, models.RecordingPolicyPBTies, models.RecordingPolicyTopThree:
+		return true
+	default:
+		return false
+	}
+}
+
+func recordingSettingsAbsent(r models.RecordingSettings) bool {
+	return !r.Enabled &&
+		strings.TrimSpace(r.OBSHost) == "" &&
+		r.OBSPort == 0 &&
+		strings.TrimSpace(r.OBSPassword) == "" &&
+		strings.TrimSpace(r.OBSPasswordProtected) == "" &&
+		!r.OBSPasswordSet &&
+		!r.AutoConnect &&
+		!r.AutoStartReplayBuffer &&
+		!r.AutoLaunchOBS &&
+		!r.LaunchOBSMinimized &&
+		strings.TrimSpace(r.OBSExecutablePath) == "" &&
+		strings.TrimSpace(string(r.SavePolicy)) == "" &&
+		len(r.AlwaysSaveScenarios) == 0 &&
+		len(r.NeverSaveScenarios) == 0 &&
+		strings.TrimSpace(r.FFmpegPath) == "" &&
+		strings.TrimSpace(r.RecordingDir) == "" &&
+		r.StorageLimitGB == 0 &&
+		r.MinFreeSpaceGB == 0 &&
+		!r.AutoCleanup &&
+		r.PreRollSeconds == 0 &&
+		r.PostRollSeconds == 0 &&
+		!r.KeepRawReplay
 }
 
 // GetConfigDir returns the application config directory under the user's home dir: $HOME/.refleks

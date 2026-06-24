@@ -4,6 +4,9 @@ import (
 	"context"
 	"embed"
 	"flag"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/logger"
@@ -14,6 +17,8 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+const recordingVideoRoutePrefix = "/recording-video/"
 
 func main() {
 	monitor := flag.Bool("monitor", false, "Start in monitor mode (hidden)")
@@ -28,7 +33,8 @@ func main() {
 		Width:  1500,
 		Height: 900,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:     assets,
+			Middleware: recordingVideoMiddleware(app),
 		},
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 1},
 		OnStartup:        app.startup,
@@ -59,5 +65,22 @@ func main() {
 
 	if err != nil {
 		println("Error:", err.Error())
+	}
+}
+
+func recordingVideoMiddleware(app *App) assetserver.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(r.URL.Path, recordingVideoRoutePrefix) {
+				id, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, recordingVideoRoutePrefix))
+				if err != nil {
+					http.Error(w, "invalid recording id", http.StatusBadRequest)
+					return
+				}
+				app.serveRecordingVideo(w, r, id)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }

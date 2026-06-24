@@ -1,6 +1,17 @@
+import { DeleteRecordingModal } from '@/features/recordings/components/DeleteRecordingModal'
 import { Button } from '@/shared/components'
-import type { StatKey } from '@/shared/types'
-import { ArrowRightLeft, PinOff } from 'lucide-react'
+import {
+  deleteRecording,
+  getRecordings,
+  openRecording,
+  refreshRecordingFiles,
+  revealRecording,
+  setRecordingProtected,
+} from '@/shared/lib'
+import type { RecordingRecord, StatKey } from '@/shared/types'
+import { EventsOn } from '@wails/runtime'
+import { ArrowRightLeft, ExternalLink, FolderOpen, Lock, LockOpen, PinOff, RefreshCw, Trash2, Video } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   buildRunStats,
   formatDurationLabel,
@@ -55,6 +66,15 @@ function buildCategoryLookup(): Map<string, string> {
 const CATEGORY_LOOKUP = buildCategoryLookup()
 
 type CategorizedStats = { category: string; stats: Array<{ label: string; value: string }> }[]
+
+function formatRecordingLabel(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function recordingMatchesRun(recording: RecordingRecord, run: HistoryRun): boolean {
+  const runId = run.item.runId?.trim()
+  return !!runId && recording.runId === runId
+}
 
 function getCategorizedStats(run: HistoryRun): CategorizedStats {
   const all = buildRunStats(run.item)
@@ -114,6 +134,8 @@ export function StatsTab({ primaryRun, compareRun, onClearPrimaryRun, onClearCom
         <HeroStat label="Duration" value={formatDurationLabel(primaryRun.durationMs)} />
       </div>
 
+      <RunRecordingsSection primaryRun={primaryRun} />
+
       {categories.map(({ category, stats }) => (
         <StatsGroup key={category} label={category}>
           {stats.map(s => <StatRow key={s.label} label={s.label} value={s.value} />)}
@@ -125,6 +147,183 @@ export function StatsTab({ primaryRun, compareRun, onClearPrimaryRun, onClearCom
           {primaryRun.item.fileName}
         </div>
       )}
+    </>
+  )
+}
+
+function RunRecordingsSection({ primaryRun }: { primaryRun: HistoryRun }) {
+  const [records, setRecords] = useState<RecordingRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState('')
+  const [error, setError] = useState('')
+  const [recordingToDelete, setRecordingToDelete] = useState<RecordingRecord | null>(null)
+
+  const runKey = primaryRun.item.runId || primaryRun.item.filePath || primaryRun.item.fileName
+
+  const linkedRecords = useMemo(
+    () => records.filter(recording => recordingMatchesRun(recording, primaryRun)),
+    [primaryRun, records],
+  )
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      setRecords(await getRecordings())
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to load linked recordings')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [runKey])
+
+  useEffect(() => {
+    const off = EventsOn('recordings:changed', () => {
+      void load()
+    })
+    return () => off()
+  }, [runKey])
+
+  const handleRefresh = async () => {
+    setBusyId('refresh')
+    setError('')
+    try {
+      setRecords(await refreshRecordingFiles())
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to refresh linked recordings')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const handleOpen = async (recording: RecordingRecord) => {
+    setBusyId(recording.id)
+    setError('')
+    try {
+      await openRecording(recording.id)
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to open recording')
+      setRecords(await refreshRecordingFiles())
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const handleReveal = async (recording: RecordingRecord) => {
+    setBusyId(recording.id)
+    setError('')
+    try {
+      await revealRecording(recording.id)
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to reveal recording')
+      setRecords(await refreshRecordingFiles())
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const handleProtect = async (recording: RecordingRecord) => {
+    setBusyId(recording.id)
+    setError('')
+    try {
+      const updated = await setRecordingProtected(recording.id, !recording.protected)
+      setRecords(prev => prev.map(item => item.id === updated.id ? updated : item))
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to update recording protection')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const confirmDeleteRecording = async (recording: RecordingRecord) => {
+    setBusyId(recording.id)
+    setError('')
+    try {
+      await deleteRecording(recording.id)
+      setRecordingToDelete(null)
+      await load()
+    } catch (e) {
+      setError((e as Error)?.message || 'Failed to delete recording')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  return (
+    <>
+      <StatsGroup label="Recordings">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-surface-muted-foreground">
+          {loading ? 'Loading linked recordings...' : `${linkedRecords.length} linked recording${linkedRecords.length === 1 ? '' : 's'}`}
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => void handleRefresh()} disabled={busyId === 'refresh'} title="Refresh missing-file state">
+          {busyId === 'refresh' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+
+      {error && <div className="text-xs text-destructive">{error}</div>}
+
+      {!loading && linkedRecords.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-surface-muted-foreground">
+          <Video className="h-3.5 w-3.5" />
+          No recording metadata is linked to this run.
+        </div>
+      )}
+
+      {linkedRecords.map(recording => {
+        const canUseVideo = !!recording.videoPath && recording.status !== 'missing'
+        const rowBusy = busyId === recording.id
+        return (
+          <div key={recording.id} className="rounded-lg bg-surface px-3 py-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{formatRecordingLabel(recording.keepReason)}</span>
+                  <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-[11px] text-surface-muted-foreground">
+                    {formatRecordingLabel(recording.status)}
+                  </span>
+                  {recording.protected && (
+                    <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
+                      <Lock className="mr-1 h-3 w-3" />Protected
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 truncate font-mono text-[11px] text-surface-muted-foreground" title={recording.videoPath || recording.obsSourcePath || ''}>
+                  {recording.videoPath || recording.obsSourcePath || 'No video path'}
+                </div>
+                {recording.lastError && <div className="mt-1 text-xs text-destructive">{recording.lastError}</div>}
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                <Button size="sm" variant="outline" disabled={!canUseVideo || rowBusy} onClick={() => void handleOpen(recording)} title="Open video">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" disabled={!canUseVideo || rowBusy} onClick={() => void handleReveal(recording)} title="Reveal in Explorer">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => void handleProtect(recording)} title={recording.protected ? 'Unprotect recording' : 'Protect recording'}>
+                  {recording.protected ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                </Button>
+                <Button size="sm" variant="outline" disabled={rowBusy} onClick={() => setRecordingToDelete(recording)} title="Delete recording">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      </StatsGroup>
+      <DeleteRecordingModal
+        recording={recordingToDelete}
+        isDeleting={!!recordingToDelete && busyId === recordingToDelete.id}
+        onClose={() => {
+          if (busyId !== recordingToDelete?.id) setRecordingToDelete(null)
+        }}
+        onConfirm={confirmDeleteRecording}
+      />
     </>
   )
 }

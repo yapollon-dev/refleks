@@ -132,6 +132,32 @@ func (s *Store) LoadRecentRuns(limit int) ([]models.RunRecord, error) {
 			continue
 		}
 		out = append(out, models.RunRecord{
+			RunID:    ComputeRunID(rec.FileName, rec.Stats),
+			FilePath: v.path,
+			FileName: rec.FileName,
+			Stats:    rec.Stats,
+			Events:   nil,
+			Env:      rec.Env,
+		})
+	}
+	return out, nil
+}
+
+// LoadAllRunSummaries loads every stored run without events or mouse traces.
+func (s *Store) LoadAllRunSummaries() ([]models.RunRecord, error) {
+	selected, err := s.selectAllFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]models.RunRecord, 0, len(selected))
+	for _, v := range selected {
+		rec, err := readRecordFile(v.path, readRecordOptions{skipEvents: true, skipMouseTrace: true})
+		if err != nil {
+			continue
+		}
+		out = append(out, models.RunRecord{
+			RunID:    ComputeRunID(rec.FileName, rec.Stats),
 			FilePath: v.path,
 			FileName: rec.FileName,
 			Stats:    rec.Stats,
@@ -230,6 +256,38 @@ func (s *Store) selectRecentFiles(limit int) ([]recentFile, error) {
 	}
 
 	return selected, nil
+}
+
+func (s *Store) selectAllFiles() ([]recentFile, error) {
+	dir, err := s.runsDir()
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	all := make([]recentFile, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(e.Name()), constants.RunFileExt) {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		all = append(all, recentFile{path: path, name: e.Name(), ts: runTimestampFromFileName(e.Name(), path)})
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].ts == all[j].ts {
+			return all[i].name < all[j].name
+		}
+		return all[i].ts < all[j].ts
+	})
+	return all, nil
 }
 
 func runTimestampFromFileName(fileName, path string) int64 {

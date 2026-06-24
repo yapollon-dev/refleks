@@ -72,6 +72,7 @@ func (s *Store) IngestRun(fullPath string, mouse models.MouseTraceProvider) (mod
 	fileName := strings.TrimSuffix(filepath.Base(fullPath), constants.StatsFileExt)
 
 	rec := models.RunRecord{
+		RunID:    ComputeRunID(fileName, stats),
 		FilePath: fullPath,
 		FileName: fileName,
 		Stats:    stats,

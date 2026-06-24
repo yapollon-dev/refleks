@@ -1,0 +1,21 @@
+{
+  "ffmpeg": {
+    "name": "gyan.dev FFmpeg release essentials",
+    "version": "8.1.1",
+    "sourceRevision": "239f2c733d",
+    "archiveUrl": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.1-essentials_build.zip",
+    "archiveSha256": "6f58ce889f59c311410f7d2b18895b33c03456463486f3b1ebc93d97a0f54541",
+    "downloadPage": "https://www.gyan.dev/ffmpeg/builds/",
+    "projectSource": "https://git.ffmpeg.org/ffmpeg.git",
+    "license": "GPLv3",
+    "correspondingSource": "Use the source revision above from https://git.ffmpeg.org/ffmpeg.git and the build configuration recorded in THIRD_PARTY_NOTICES/ffmpeg/VERSION.txt."
+  },
+  "obs": {
+    "version": "32.1.2",
+    "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-Windows-x64-Installer.exe",
+    "installerSha256": "94d180c1fc481ccc307b95513f795d088d63ac4f61ad3253c2ac0d94d0844110",
+    "signerSubject": "CN=\"OBS Project, LLC\", O=\"OBS Project, LLC\", L=Sheridan, S=Wyoming, C=US, SERIALNUMBER=2023-001272252, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Wyoming, OID.1.3.6.1.4.1.311.60.2.1.3=US",
+    "signerIssuer": "CN=DigiCert G5 CS ECC SHA384 2021 CA1, O=\"DigiCert, Inc.\", C=US",
+    "signerThumbprint": "178EB178111547B52B3821A278653EEDC3E5B1F7"
+  }
+}
